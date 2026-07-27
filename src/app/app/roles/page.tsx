@@ -27,8 +27,8 @@ export default async function RolesPage({
   searchParams: Promise<{ created?: string; error?: string }>;
 }) {
   const params = await searchParams;
-  const organization = await requireActiveOrganization();
-  const membership = await requireActiveMembership(organization.id);
+  const organization = await requireActiveOrganization("/app/roles");
+  const membership = await requireActiveMembership(organization.id, "/app/roles");
   const canManageRoles = canManageOrganizationRoles(membership.role);
 
   const roles = await prisma.organizationRole.findMany({

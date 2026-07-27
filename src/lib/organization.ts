@@ -52,8 +52,8 @@ export async function getActiveOrganization(userId: string) {
   return firstMembership.organization;
 }
 
-export async function requireActiveOrganization() {
-  const user = await requireCurrentUser("/app/dashboard");
+export async function requireActiveOrganization(next = "/app/dashboard") {
+  const user = await requireCurrentUser(next);
   const organization = await getActiveOrganization(user.id);
 
   if (!organization) {
@@ -63,8 +63,11 @@ export async function requireActiveOrganization() {
   return organization;
 }
 
-export async function requireActiveMembership(organizationId?: string) {
-  const user = await requireCurrentUser("/app/dashboard");
+export async function requireActiveMembership(
+  organizationId?: string,
+  next = "/app/dashboard",
+) {
+  const user = await requireCurrentUser(next);
   const activeOrganization =
     organizationId ? null : await getActiveOrganization(user.id);
   const resolvedOrganizationId = organizationId ?? activeOrganization?.id;
