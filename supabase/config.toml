@@ -21,6 +21,9 @@ enabled = true
 site_url = "https://orbit-fiqo-anugrahs-projects.vercel.app"
 additional_redirect_urls = [
   "https://orbit-fiqo-anugrahs-projects.vercel.app/auth/callback",
+  "https://orbit-eta-nine.vercel.app/auth/callback",
+  "https://www.orbitedu.id/auth/callback",
+  "https://orbitedu.id/auth/callback",
   "http://localhost:3000/auth/callback",
   "http://localhost:3001/auth/callback"
 ]

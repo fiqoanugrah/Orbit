@@ -17,10 +17,6 @@ function getSafeNext(value: FormDataEntryValue | string | null) {
 }
 
 async function getRequestOrigin() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-  }
-
   const requestHeaders = await headers();
   const host =
     requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
@@ -28,7 +24,16 @@ async function getRequestOrigin() {
     requestHeaders.get("x-forwarded-proto") ??
     (host?.includes("localhost") ? "http" : "https");
 
-  return host ? `${protocol}://${host}` : "http://localhost:3000";
+  if (host?.includes("localhost") && process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  }
+
+  return host
+    ? `${protocol}://${host}`
+    : (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(
+        /\/$/,
+        "",
+      );
 }
 
 export async function signInWithGoogle(formData: FormData) {
