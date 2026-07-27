@@ -28,8 +28,16 @@ Setup database development:
 
 ```bash
 cp .env.example .env
-pnpm db:migrate
+pnpm db:deploy
+pnpm db:seed
 ```
+
+Required environment variables for Vercel/Supabase:
+
+- `POSTGRES_PRISMA_URL`
+- `POSTGRES_URL_NON_POOLING`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
 ## Product Notes
 
