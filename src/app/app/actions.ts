@@ -38,6 +38,40 @@ export async function switchOrganization(formData: FormData) {
   redirect("/app/dashboard");
 }
 
+export async function deleteOrganization(formData: FormData) {
+  const user = await requireCurrentUser("/auth/sign-in");
+  const organizationId = String(formData.get("organizationId") ?? "");
+
+  const membership = await prisma.membership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId,
+        userId: user.id,
+      },
+    },
+    include: {
+      organization: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+
+  if (!membership || membership.role !== "OWNER") {
+    redirect("/auth/sign-in?error=delete");
+  }
+
+  await prisma.organization.delete({
+    where: { id: membership.organization.id },
+  });
+
+  const cookieStore = await cookies();
+  if (cookieStore.get(activeOrganizationCookie)?.value === organizationId) {
+    cookieStore.delete(activeOrganizationCookie);
+  }
+
+  redirect("/auth/sign-in?deleted=1");
+}
+
 export async function updateOrganizationProfile(formData: FormData) {
   const organization = await requireActiveOrganization();
   const name = String(formData.get("name") ?? "").trim();
