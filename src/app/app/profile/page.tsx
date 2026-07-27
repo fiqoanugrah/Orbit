@@ -12,8 +12,12 @@ import {
   switchOrganization,
   updateOrganizationProfile,
 } from "@/app/app/actions";
-import { requireActiveOrganization } from "@/lib/organization";
-import { prisma } from "@/lib/prisma";
+import { signOut } from "@/app/auth/actions";
+import { requireCurrentUser } from "@/lib/auth";
+import {
+  getOrganizationsForUser,
+  requireActiveOrganization,
+} from "@/lib/organization";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +27,9 @@ export default async function ProfilePage({
   searchParams: Promise<{ error?: string; updated?: string }>;
 }) {
   const params = await searchParams;
+  const currentUser = await requireCurrentUser("/app/profile");
   const activeOrganization = await requireActiveOrganization();
-  const organizations = await prisma.organization.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+  const organizations = await getOrganizationsForUser(currentUser.id);
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-[#172033]">
@@ -54,6 +57,11 @@ export default async function ProfilePage({
             <Plus className="size-4" aria-hidden="true" />
             Organization Baru
           </Link>
+          <form action={signOut}>
+            <button className="flex h-10 items-center justify-center rounded-md border border-[#d7e0ea] bg-white px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9]">
+              Keluar
+            </button>
+          </form>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">

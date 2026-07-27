@@ -62,7 +62,7 @@ export default function LandingPage() {
               Masuk
             </Link>
             <Link
-              href="/onboarding/create-organization"
+              href="/auth/sign-up"
               className="flex h-10 items-center gap-2 rounded-md bg-[#0b6ffb] px-3 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
             >
               Sign up
@@ -86,7 +86,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/onboarding/create-organization"
+              href="/auth/sign-up"
               className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-4 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
             >
               Sign up Tempat Les
@@ -177,7 +177,7 @@ export default function LandingPage() {
             </p>
           </div>
           <Link
-            href="/onboarding/create-organization"
+            href="/auth/sign-up"
             className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-3 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
           >
             Setup Orbit

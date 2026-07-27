@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, Building2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Building2, CheckCircle2, UserCircle } from "lucide-react";
 
 import { createOrganization } from "@/app/onboarding/actions";
+import { requireCurrentUser } from "@/lib/auth";
 
 export default async function CreateOrganizationPage({
   searchParams,
@@ -9,6 +10,7 @@ export default async function CreateOrganizationPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const params = await searchParams;
+  const user = await requireCurrentUser("/onboarding/create-organization");
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-[#172033]">
@@ -64,38 +66,23 @@ export default async function CreateOrganizationPage({
                 Data Tempat Les
               </h2>
               <p className="mt-2 text-sm text-[#6b7890]">
-                Isi data owner dan tempat les dulu. Detail lain bisa dilengkapi
-                dari profile.
+                Akun kamu akan otomatis menjadi owner organization baru ini.
+                Detail lain bisa dilengkapi dari profile.
               </p>
             </div>
 
             <div className="grid gap-4 py-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-2">
-                  <span className="text-sm font-semibold">Nama owner</span>
-                  <input
-                    name="ownerName"
-                    required
-                    placeholder="Fiqo Anugrah"
-                    className="h-11 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition placeholder:text-[#9aa7b8] focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15"
-                  />
-                </label>
-                <label className="grid gap-2">
-                  <span className="text-sm font-semibold">Email owner</span>
-                  <input
-                    name="ownerEmail"
-                    type="email"
-                    required
-                    placeholder="owner@tempatles.com"
-                    className="h-11 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition placeholder:text-[#9aa7b8] focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15"
-                  />
-                </label>
+              <div className="flex items-center gap-3 rounded-md border border-[#e6edf5] bg-[#fbfcfe] p-3">
+                <div className="grid size-11 place-items-center rounded-md bg-[#eaf2ff] text-[#075bc9]">
+                  <UserCircle className="size-5" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{user.name}</p>
+                  <p className="truncate text-xs text-[#6b7890]">
+                    {user.email}
+                  </p>
+                </div>
               </div>
-              {params.error === "owner" ? (
-                <span className="text-xs font-medium text-[#c73535]">
-                  Data owner wajib diisi.
-                </span>
-              ) : null}
 
               <label className="grid gap-2">
                 <span className="text-sm font-semibold">Nama tempat les</span>

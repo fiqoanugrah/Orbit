@@ -7,22 +7,29 @@ import {
   activeOrganizationCookie,
   requireActiveOrganization,
 } from "@/lib/organization";
+import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { saveOrganizationPhoto } from "@/lib/upload";
 
 export async function switchOrganization(formData: FormData) {
+  const user = await requireCurrentUser("/auth/sign-in");
   const organizationId = String(formData.get("organizationId") ?? "");
-  const organization = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { id: true },
+  const membership = await prisma.membership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId,
+        userId: user.id,
+      },
+    },
+    select: { organizationId: true },
   });
 
-  if (!organization) {
+  if (!membership) {
     redirect("/auth/sign-in?error=organization");
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(activeOrganizationCookie, organization.id, {
+  cookieStore.set(activeOrganizationCookie, membership.organizationId, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",

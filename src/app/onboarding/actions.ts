@@ -7,14 +7,14 @@ import {
   activeOrganizationCookie,
   createUniqueSlug,
 } from "@/lib/organization";
+import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { seedOrganizationWorkspace } from "@/lib/seed-organization";
 import { saveOrganizationPhoto } from "@/lib/upload";
 
 export async function createOrganization(formData: FormData) {
+  const owner = await requireCurrentUser("/onboarding/create-organization");
   const name = String(formData.get("name") ?? "").trim();
-  const ownerName = String(formData.get("ownerName") ?? "").trim();
-  const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
@@ -23,10 +23,6 @@ export async function createOrganization(formData: FormData) {
 
   if (name.length < 2) {
     redirect("/onboarding/create-organization?error=name");
-  }
-
-  if (!ownerName || !ownerEmail) {
-    redirect("/onboarding/create-organization?error=owner");
   }
 
   const organization = await prisma.organization.create({
@@ -38,15 +34,6 @@ export async function createOrganization(formData: FormData) {
       address: address || null,
       photoUrl: await saveOrganizationPhoto(photo instanceof File ? photo : null),
       timezone: timezone || "Asia/Jakarta",
-    },
-  });
-
-  const owner = await prisma.user.upsert({
-    where: { email: ownerEmail },
-    update: { name: ownerName },
-    create: {
-      name: ownerName,
-      email: ownerEmail,
     },
   });
 
