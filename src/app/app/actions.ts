@@ -48,6 +48,7 @@ export async function updateOrganizationProfile(formData: FormData) {
   const photo = formData.get("photo");
   const photoUrl = await saveOrganizationPhoto(
     photo instanceof File ? photo : null,
+    organization.id,
   );
 
   if (name.length < 2) {

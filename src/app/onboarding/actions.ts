@@ -33,10 +33,21 @@ export async function createOrganization(formData: FormData) {
       phone: phone || null,
       email: email || null,
       address: address || null,
-      photoUrl: await saveOrganizationPhoto(photo instanceof File ? photo : null),
       timezone: timezone || "Asia/Jakarta",
     },
   });
+
+  const photoUrl = await saveOrganizationPhoto(
+    photo instanceof File ? photo : null,
+    organization.id,
+  );
+
+  if (photoUrl) {
+    await prisma.organization.update({
+      where: { id: organization.id },
+      data: { photoUrl },
+    });
+  }
 
   const { ownerRole } = await ensureDefaultOrganizationRoles(organization.id);
 
