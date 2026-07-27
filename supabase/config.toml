@@ -18,8 +18,12 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3001"]
+site_url = "https://orbit-eta-nine.vercel.app"
+additional_redirect_urls = [
+  "https://orbit-eta-nine.vercel.app/auth/callback",
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3001/auth/callback"
+]
 jwt_expiry = 3600
 enable_signup = true
 
