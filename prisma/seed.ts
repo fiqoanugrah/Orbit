@@ -1,4 +1,5 @@
 import { prisma } from "../src/lib/prisma";
+import { ensureDefaultOrganizationRoles } from "../src/lib/roles";
 import { seedOrganizationWorkspace } from "../src/lib/seed-organization";
 
 function createSlug(value: string) {
@@ -37,6 +38,8 @@ async function main() {
     },
   });
 
+  const { ownerRole } = await ensureDefaultOrganizationRoles(organization.id);
+
   await prisma.membership.upsert({
     where: {
       organizationId_userId: {
@@ -44,11 +47,12 @@ async function main() {
         userId: owner.id,
       },
     },
-    update: { role: "OWNER" },
+    update: { role: "OWNER", customRoleId: ownerRole.id },
     create: {
       organizationId: organization.id,
       userId: owner.id,
       role: "OWNER",
+      customRoleId: ownerRole.id,
     },
   });
 

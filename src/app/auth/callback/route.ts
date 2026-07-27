@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 import { getCurrentUser } from "@/lib/auth";
+import { activeOrganizationCookie } from "@/lib/organization";
+import { prisma } from "@/lib/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function getSafeNext(value: string | null) {
@@ -9,6 +12,35 @@ function getSafeNext(value: string | null) {
   }
 
   return value;
+}
+
+async function resolvePostLoginPath(userId: string, next: string) {
+  if (!["/auth/sign-in", "/auth/sign-up"].includes(next)) {
+    return next;
+  }
+
+  const memberships = await prisma.membership.findMany({
+    where: { userId },
+    select: { organizationId: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (memberships.length === 0) {
+    return "/onboarding/create-organization";
+  }
+
+  if (memberships.length === 1) {
+    const cookieStore = await cookies();
+    cookieStore.set(activeOrganizationCookie, memberships[0].organizationId, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+    });
+
+    return "/app/dashboard";
+  }
+
+  return "/auth/sign-in";
 }
 
 export async function GET(request: Request) {
@@ -39,9 +71,17 @@ export async function GET(request: Request) {
       await supabase.auth.exchangeCodeForSession(code);
 
     if (!exchangeError) {
-      await getCurrentUser();
+      const user = await getCurrentUser();
 
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
+      if (!user) {
+        return NextResponse.redirect(
+          new URL("/auth/auth-code-error?error=user", requestUrl.origin),
+        );
+      }
+
+      const redirectPath = await resolvePostLoginPath(user.id, next);
+
+      return NextResponse.redirect(new URL(redirectPath, requestUrl.origin));
     }
 
     console.error("Supabase OAuth code exchange failed", {

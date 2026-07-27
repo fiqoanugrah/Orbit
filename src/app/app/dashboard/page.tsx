@@ -20,6 +20,7 @@ import {
   ReceiptText,
   Search,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   UserCircle,
   Users,
@@ -27,14 +28,22 @@ import {
 } from "lucide-react";
 
 import { moduleGroups } from "@/lib/orbit-data";
-import { requireActiveOrganization } from "@/lib/organization";
+import {
+  requireActiveMembership,
+  requireActiveOrganization,
+} from "@/lib/organization";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 const navigation = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/app/dashboard", active: true },
+  {
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    href: "/app/dashboard",
+    active: true,
+  },
   { label: "Students", icon: Users, href: "/app/dashboard" },
   { label: "Parents", icon: Users, href: "/app/dashboard" },
   { label: "Teachers", icon: GraduationCap, href: "/app/dashboard" },
@@ -43,6 +52,7 @@ const navigation = [
   { label: "Classes", icon: CalendarDays, href: "/app/dashboard" },
   { label: "Invoices", icon: ReceiptText, href: "/app/dashboard" },
   { label: "Profile", icon: UserCircle, href: "/app/profile" },
+  { label: "Roles", icon: ShieldCheck, href: "/app/roles" },
   { label: "Settings", icon: Settings, href: "/app/profile" },
 ];
 
@@ -85,6 +95,7 @@ function getMonthStart() {
 
 export default async function DashboardPage() {
   const organization = await requireActiveOrganization();
+  const membership = await requireActiveMembership(organization.id);
   const organizationId = organization.id;
   const monthStart = getMonthStart();
 
@@ -259,9 +270,15 @@ export default async function DashboardPage() {
                 <p className="text-xs font-semibold uppercase text-[#f5a623]">
                   {organization.name}
                 </p>
-                <h1 className="text-2xl font-semibold text-[#172033]">
-                  Dashboard Operasional
-                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl font-semibold text-[#172033]">
+                    Dashboard Operasional
+                  </h1>
+                  <span className="inline-flex h-7 items-center gap-2 rounded-md border border-[#d7e0ea] bg-white px-2 text-xs font-semibold text-[#536174]">
+                    <ShieldCheck className="size-3.5 text-[#16834a]" />
+                    {membership.customRole?.name ?? membership.role}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <label className="relative min-w-0 flex-1 md:w-72 md:flex-none">

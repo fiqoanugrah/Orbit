@@ -74,6 +74,7 @@ model Organization {
   photoUrl        String?
   timezone        String              @default("Asia/Jakarta")
   memberships     Membership[]
+  roles           OrganizationRole[]
   parents         Parent[]
   students        Student[]
   teachers        Teacher[]
@@ -107,8 +108,10 @@ model Membership {
   id             String       @id @default(cuid())
   organizationId String
   userId         String
+  customRoleId   String?
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customRole     OrganizationRole? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
   role           UserRole
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -116,6 +119,24 @@ model Membership {
   @@unique([organizationId, userId])
   @@index([organizationId])
   @@index([userId])
+  @@index([customRoleId])
+}
+
+model OrganizationRole {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  permissions    String[]     @default([])
+  isSystem       Boolean      @default(false)
+  memberships    Membership[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("organization_roles")
 }
 
 model Parent {

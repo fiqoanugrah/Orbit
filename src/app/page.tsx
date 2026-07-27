@@ -8,8 +8,15 @@ import {
   LayoutDashboard,
   ReceiptText,
   School,
+  ShieldCheck,
   Users,
 } from "lucide-react";
+
+import { signOut } from "@/app/auth/actions";
+import { getCurrentUser } from "@/lib/auth";
+import { getOrganizationsForUser } from "@/lib/organization";
+
+export const dynamic = "force-dynamic";
 
 const highlights = [
   {
@@ -38,7 +45,12 @@ const productFlow = [
   "Terbitkan invoice",
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const user = await getCurrentUser();
+  const organizations = user ? await getOrganizationsForUser(user.id) : [];
+  const primaryAuthenticatedHref =
+    organizations.length > 0 ? "/app/dashboard" : "/onboarding/create-organization";
+
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-[#172033]">
       <header className="border-b border-[#dfe6ef] bg-white">
@@ -55,19 +67,49 @@ export default function LandingPage() {
             </span>
           </Link>
           <nav className="flex items-center gap-2" aria-label="Landing actions">
-            <Link
-              href="/auth/sign-in"
-              className="hidden h-10 items-center rounded-md px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9] sm:flex"
-            >
-              Masuk
-            </Link>
-            <Link
-              href="/auth/sign-up"
-              className="flex h-10 items-center gap-2 rounded-md bg-[#0b6ffb] px-3 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
-            >
-              Sign up
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </Link>
+            {user ? (
+              <>
+                <div className="hidden h-10 max-w-56 items-center gap-2 rounded-md border border-[#d7e0ea] bg-[#fbfcfe] px-3 sm:flex">
+                  <ShieldCheck className="size-4 shrink-0 text-[#16834a]" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-semibold text-[#172033]">
+                      Authenticated
+                    </span>
+                    <span className="block truncate text-xs text-[#6b7890]">
+                      {user.email}
+                    </span>
+                  </span>
+                </div>
+                <form action={signOut} className="hidden sm:block">
+                  <button className="h-10 rounded-md px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9]">
+                    Keluar
+                  </button>
+                </form>
+                <Link
+                  href={primaryAuthenticatedHref}
+                  className="flex h-10 items-center gap-2 rounded-md bg-[#0b6ffb] px-3 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
+                >
+                  {organizations.length > 0 ? "Dashboard" : "Buat Organization"}
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/auth/sign-in"
+                  className="hidden h-10 items-center rounded-md px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9] sm:flex"
+                >
+                  Masuk
+                </Link>
+                <Link
+                  href="/auth/sign-up"
+                  className="flex h-10 items-center gap-2 rounded-md bg-[#0b6ffb] px-3 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
+                >
+                  Sign up
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -86,17 +128,21 @@ export default function LandingPage() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/auth/sign-up"
+              href={user ? primaryAuthenticatedHref : "/auth/sign-up"}
               className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-4 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
             >
-              Sign up Tempat Les
+              {user
+                ? organizations.length > 0
+                  ? "Buka Dashboard"
+                  : "Buat Organization"
+                : "Sign up Tempat Les"}
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
             <Link
-              href="/auth/sign-in"
+              href={user ? "/auth/sign-in" : "/auth/sign-in"}
               className="flex h-11 items-center justify-center rounded-md border border-[#d7e0ea] bg-white px-4 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9]"
             >
-              Masuk
+              {user ? "Pilih Organization" : "Masuk"}
             </Link>
           </div>
         </div>
@@ -177,10 +223,10 @@ export default function LandingPage() {
             </p>
           </div>
           <Link
-            href="/auth/sign-up"
+            href={user ? primaryAuthenticatedHref : "/auth/sign-up"}
             className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-3 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
           >
-            Setup Orbit
+            {user ? "Lanjut Setup" : "Setup Orbit"}
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
         </div>

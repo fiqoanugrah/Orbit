@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ArrowRight,
   Building2,
@@ -24,6 +25,10 @@ export default async function SignInPage({
   const user = await getCurrentUser();
   const organizations = user ? await getOrganizationsForUser(user.id) : [];
   const next = params.next ?? "/auth/sign-in";
+
+  if (user && organizations.length === 0) {
+    redirect("/onboarding/create-organization");
+  }
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-[#172033]">

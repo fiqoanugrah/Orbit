@@ -9,6 +9,7 @@ import {
 } from "@/lib/organization";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureDefaultOrganizationRoles } from "@/lib/roles";
 import { seedOrganizationWorkspace } from "@/lib/seed-organization";
 import { saveOrganizationPhoto } from "@/lib/upload";
 
@@ -37,6 +38,8 @@ export async function createOrganization(formData: FormData) {
     },
   });
 
+  const { ownerRole } = await ensureDefaultOrganizationRoles(organization.id);
+
   await prisma.membership.upsert({
     where: {
       organizationId_userId: {
@@ -44,11 +47,12 @@ export async function createOrganization(formData: FormData) {
         userId: owner.id,
       },
     },
-    update: { role: "OWNER" },
+    update: { role: "OWNER", customRoleId: ownerRole.id },
     create: {
       organizationId: organization.id,
       userId: owner.id,
       role: "OWNER",
+      customRoleId: ownerRole.id,
     },
   });
 

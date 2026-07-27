@@ -63,6 +63,36 @@ export async function requireActiveOrganization() {
   return organization;
 }
 
+export async function requireActiveMembership(organizationId?: string) {
+  const user = await requireCurrentUser("/app/dashboard");
+  const activeOrganization =
+    organizationId ? null : await getActiveOrganization(user.id);
+  const resolvedOrganizationId = organizationId ?? activeOrganization?.id;
+
+  if (!resolvedOrganizationId) {
+    redirect("/onboarding/create-organization");
+  }
+
+  const membership = await prisma.membership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId: resolvedOrganizationId,
+        userId: user.id,
+      },
+    },
+    include: {
+      customRole: true,
+      user: true,
+    },
+  });
+
+  if (!membership) {
+    redirect("/auth/sign-in?error=organization");
+  }
+
+  return membership;
+}
+
 export function createSlug(value: string) {
   const slug = value
     .toLowerCase()
