@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, Building2, CheckCircle2, UserCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, UserCircle } from "lucide-react";
 
 import { createOrganization } from "@/app/onboarding/actions";
+import { CreateOrganizationSubmitButton } from "@/app/onboarding/create-organization/submit-button";
+import { OrbitMark } from "@/components/orbit-mark";
 import { requireCurrentUser } from "@/lib/auth";
 
 export default async function CreateOrganizationPage({
@@ -24,9 +26,7 @@ export default async function CreateOrganizationPage({
               <ArrowLeft className="size-4" aria-hidden="true" />
               Kembali
             </Link>
-            <div className="grid size-12 place-items-center rounded-md bg-[#0b6ffb] text-white">
-              <Building2 className="size-5" aria-hidden="true" />
-            </div>
+            <OrbitMark className="size-12" priority />
             <h1 className="mt-5 text-3xl font-semibold leading-tight">
               Buat organization tempat les.
             </h1>
@@ -39,7 +39,7 @@ export default async function CreateOrganizationPage({
           <div className="mt-8 space-y-3 border-t border-[#e6edf5] pt-5">
             {[
               "Dashboard langsung aktif setelah submit",
-              "Data contoh dibuat otomatis untuk uji flow",
+              "Data organization tersimpan ke Supabase",
               "Struktur database sudah siap multi-tenant",
             ].map((item) => (
               <div key={item} className="flex items-center gap-3 text-sm">
@@ -155,9 +155,7 @@ export default async function CreateOrganizationPage({
               </label>
             </div>
 
-            <button className="flex h-11 w-full items-center justify-center rounded-md bg-[#0b6ffb] px-4 text-sm font-semibold text-white transition hover:bg-[#075bc9]">
-              Buat dan Masuk Dashboard
-            </button>
+            <CreateOrganizationSubmitButton />
           </form>
         </section>
       </div>

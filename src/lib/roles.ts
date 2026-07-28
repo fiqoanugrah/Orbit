@@ -99,6 +99,50 @@ export async function ensureDefaultOrganizationRoles(organizationId: string) {
   };
 }
 
-export function canManageOrganizationRoles(role: UserRole) {
-  return role === UserRole.OWNER || role === UserRole.ADMIN;
+type PermissionKey = (typeof organizationPermissions)[number]["key"];
+
+type MembershipWithPermissions = {
+  role: UserRole;
+  customRole?: {
+    permissions: string[];
+  } | null;
+};
+
+function getDefaultPermissions(role: UserRole) {
+  const defaultRole = defaultOrganizationRoles.find(
+    (organizationRole) => organizationRole.systemRole === role,
+  );
+
+  return defaultRole?.permissions ?? [];
+}
+
+export function getOrganizationPermissionKeys(
+  membership: MembershipWithPermissions,
+): string[] {
+  if (membership.role === UserRole.OWNER) {
+    return organizationPermissions.map((permission) => permission.key);
+  }
+
+  return membership.customRole?.permissions.length
+    ? membership.customRole.permissions
+    : [...getDefaultPermissions(membership.role)];
+}
+
+export function hasOrganizationPermission(
+  membership: MembershipWithPermissions,
+  permission: PermissionKey,
+) {
+  return getOrganizationPermissionKeys(membership).includes(permission);
+}
+
+export function canManageOrganizationRoles(
+  membership: MembershipWithPermissions,
+) {
+  return hasOrganizationPermission(membership, "roles.manage");
+}
+
+export function canManageOrganizationMembers(
+  membership: MembershipWithPermissions,
+) {
+  return hasOrganizationPermission(membership, "members.manage");
 }

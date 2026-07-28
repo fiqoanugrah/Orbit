@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 
-import { signInWithGoogle } from "@/app/auth/actions";
+import { signInAsDevUser, signInWithGoogle } from "@/app/auth/actions";
+import { OrbitMark } from "@/components/orbit-mark";
 import { getCurrentUser } from "@/lib/auth";
+import { isDevAuthEnabled } from "@/lib/dev-auth";
+import { PendingButton } from "@/components/pending-button";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +16,13 @@ export default async function SignUpPage({
 }) {
   const params = await searchParams;
   const user = await getCurrentUser();
+  const canUseDevLogin = isDevAuthEnabled();
 
   if (user) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f6f8fb] px-4 text-[#172033]">
         <section className="w-full max-w-md rounded-md border border-[#dfe6ef] bg-white p-6 text-center shadow-sm">
-          <div className="mx-auto grid size-12 place-items-center rounded-md bg-[#eaf2ff] text-[#075bc9]">
-            <Building2 className="size-5" aria-hidden="true" />
-          </div>
+          <OrbitMark className="mx-auto size-12" priority />
           <h1 className="mt-5 text-2xl font-semibold">
             Akun kamu sudah siap.
           </h1>
@@ -51,9 +53,7 @@ export default async function SignUpPage({
               <ArrowLeft className="size-4" aria-hidden="true" />
               Kembali
             </Link>
-            <div className="grid size-12 place-items-center rounded-md bg-[#0b6ffb] text-white">
-              <Building2 className="size-5" aria-hidden="true" />
-            </div>
+            <OrbitMark className="size-12" priority />
             <h1 className="mt-5 text-3xl font-semibold leading-tight">
               Buat akun Orbit untuk tempat les kamu.
             </h1>
@@ -109,13 +109,32 @@ export default async function SignUpPage({
                   name="next"
                   value="/onboarding/create-organization"
                 />
-                <button className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-[#d7e0ea] bg-white px-4 text-sm font-semibold text-[#172033] transition hover:bg-[#f1f5f9]">
+                <PendingButton
+                  className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-[#d7e0ea] bg-white px-4 text-sm font-semibold text-[#172033] transition hover:bg-[#f1f5f9] disabled:cursor-wait disabled:opacity-70"
+                  pendingChildren="Membuka Google..."
+                >
                   <span className="grid size-5 place-items-center rounded-sm bg-[#172033] text-xs font-bold text-white">
                     G
                   </span>
                   Sign up dengan Google
-                </button>
+                </PendingButton>
               </form>
+
+              {canUseDevLogin ? (
+                <form action={signInAsDevUser}>
+                  <input
+                    type="hidden"
+                    name="next"
+                    value="/onboarding/create-organization"
+                  />
+                  <PendingButton
+                    className="flex h-11 w-full items-center justify-center rounded-md bg-[#172033] px-4 text-sm font-semibold text-white transition hover:bg-[#25324a] disabled:cursor-wait disabled:bg-[#536174]"
+                    pendingChildren="Masuk..."
+                  >
+                    Masuk local dev
+                  </PendingButton>
+                </form>
+              ) : null}
 
               <p className="text-center text-sm text-[#6b7890]">
                 Sudah punya akun?{" "}

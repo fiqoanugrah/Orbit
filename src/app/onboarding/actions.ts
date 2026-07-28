@@ -10,7 +10,6 @@ import {
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultOrganizationRoles } from "@/lib/roles";
-import { seedOrganizationWorkspace } from "@/lib/seed-organization";
 import { saveOrganizationPhoto } from "@/lib/upload";
 
 export async function createOrganization(formData: FormData) {
@@ -66,8 +65,6 @@ export async function createOrganization(formData: FormData) {
       customRoleId: ownerRole.id,
     },
   });
-
-  await seedOrganizationWorkspace(organization.id);
 
   const cookieStore = await cookies();
   cookieStore.set(activeOrganizationCookie, organization.id, {

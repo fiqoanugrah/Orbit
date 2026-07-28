@@ -14,7 +14,7 @@ export async function createOrganizationRole(formData: FormData) {
   const organization = await requireActiveOrganization();
   const membership = await requireActiveMembership(organization.id);
 
-  if (!canManageOrganizationRoles(membership.role)) {
+  if (!canManageOrganizationRoles(membership)) {
     redirect("/app/roles?error=permission");
   }
 

@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { activeOrganizationCookie } from "@/lib/organization";
+import { devAuthCookie, getDevAuthUser, isDevAuthEnabled } from "@/lib/dev-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function getSafeNext(value: FormDataEntryValue | string | null) {
@@ -23,10 +24,6 @@ async function getRequestOrigin() {
   const protocol =
     requestHeaders.get("x-forwarded-proto") ??
     (host?.includes("localhost") ? "http" : "https");
-
-  if (host?.includes("localhost") && process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-  }
 
   return host
     ? `${protocol}://${host}`
@@ -58,12 +55,31 @@ export async function signInWithGoogle(formData: FormData) {
   redirect(data.url);
 }
 
+export async function signInAsDevUser(formData: FormData) {
+  if (!isDevAuthEnabled()) {
+    redirect("/auth/sign-in?error=dev");
+  }
+
+  const next = getSafeNext(formData.get("next"));
+  const cookieStore = await cookies();
+  const devUser = getDevAuthUser();
+
+  cookieStore.set(devAuthCookie, devUser.email, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+  });
+
+  redirect(next);
+}
+
 export async function signOut() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
 
   const cookieStore = await cookies();
   cookieStore.delete(activeOrganizationCookie);
+  cookieStore.delete(devAuthCookie);
 
   redirect("/");
 }

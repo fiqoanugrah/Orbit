@@ -51,6 +51,7 @@ async function saveToSupabaseStorage(
   buffer: Buffer,
   safeExtension: string,
   organizationId: string,
+  folder = "organizations",
 ) {
   const supabase = getSupabaseStorageClient();
 
@@ -60,7 +61,7 @@ async function saveToSupabaseStorage(
 
   await ensureOrganizationAssetsBucket(supabase);
 
-  const objectPath = `organizations/${organizationId}/${crypto.randomUUID()}.${safeExtension}`;
+  const objectPath = `${folder}/${organizationId}/${crypto.randomUUID()}.${safeExtension}`;
   const { error } = await supabase.storage
     .from(organizationAssetsBucket)
     .upload(objectPath, buffer, {
@@ -79,36 +80,47 @@ async function saveToSupabaseStorage(
   return data.publicUrl;
 }
 
-async function saveToLocalUploads(buffer: Buffer, safeExtension: string) {
+async function saveToLocalUploads(
+  buffer: Buffer,
+  safeExtension: string,
+  folder = "organizations",
+) {
   const fileName = `${crypto.randomUUID()}.${safeExtension}`;
   const uploadDirectory = path.join(
     process.cwd(),
     "public",
     "uploads",
-    "organizations",
+    folder,
   );
   const uploadPath = path.join(uploadDirectory, fileName);
 
   await mkdir(uploadDirectory, { recursive: true });
   await writeFile(uploadPath, buffer);
 
-  return `/uploads/organizations/${fileName}`;
+  return `/uploads/${folder}/${fileName}`;
 }
 
-export async function saveOrganizationPhoto(
-  file: File | null,
-  organizationId: string,
-) {
+async function savePhoto({
+  errorLabel,
+  file,
+  folder,
+  organizationId,
+}: {
+  errorLabel: string;
+  file: File | null;
+  folder?: string;
+  organizationId: string;
+}) {
   if (!file || file.size === 0) {
     return null;
   }
 
   if (!file.type.startsWith("image/")) {
-    throw new Error("Organization photo must be an image.");
+    throw new Error(`${errorLabel} photo must be an image.`);
   }
 
   if (file.size > maxUploadSize) {
-    throw new Error("Organization photo must be smaller than 5 MB.");
+    throw new Error(`${errorLabel} photo must be smaller than 5 MB.`);
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -119,6 +131,7 @@ export async function saveOrganizationPhoto(
     buffer,
     safeExtension,
     organizationId,
+    folder,
   );
 
   if (storageUrl) {
@@ -126,8 +139,38 @@ export async function saveOrganizationPhoto(
   }
 
   try {
-    return await saveToLocalUploads(buffer, safeExtension);
+    return await saveToLocalUploads(buffer, safeExtension, folder);
   } catch {
     return null;
   }
+}
+
+export async function saveOrganizationPhoto(
+  file: File | null,
+  organizationId: string,
+) {
+  return savePhoto({
+    errorLabel: "Organization",
+    file,
+    folder: "organizations",
+    organizationId,
+  });
+}
+
+export async function saveStudentPhoto(file: File | null, organizationId: string) {
+  return savePhoto({
+    errorLabel: "Student",
+    file,
+    folder: "students",
+    organizationId,
+  });
+}
+
+export async function saveTeacherPhoto(file: File | null, organizationId: string) {
+  return savePhoto({
+    errorLabel: "Teacher",
+    file,
+    folder: "teachers",
+    organizationId,
+  });
 }

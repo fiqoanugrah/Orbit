@@ -1,12 +1,76 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { requireCurrentUser } from "@/lib/auth";
+import { devAuthCookie, getDevAuthUser, isDevAuthEnabled } from "@/lib/dev-auth";
 import { prisma } from "@/lib/prisma";
 
 export const activeOrganizationCookie = "orbit_active_organization_id";
 
-export async function getOrganizationsForUser(userId: string) {
+const getDevWorkspaceContext = cache(async function getDevWorkspaceContext() {
+  if (!isDevAuthEnabled()) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const devEmail = cookieStore.get(devAuthCookie)?.value;
+  const devUser = getDevAuthUser();
+
+  if (devEmail !== devUser.email) {
+    return null;
+  }
+
+  const activeOrganizationId = cookieStore.get(activeOrganizationCookie)?.value;
+  const memberships = await prisma.membership.findMany({
+    where: { user: { email: devUser.email } },
+    include: {
+      customRole: true,
+      organization: true,
+      user: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (memberships.length === 0) {
+    const user = await prisma.user.upsert({
+      where: { email: devUser.email },
+      update: { name: devUser.name },
+      create: {
+        email: devUser.email,
+        name: devUser.name,
+      },
+    });
+
+    return {
+      activeMembership: null,
+      memberships,
+      organization: null,
+      organizations: [],
+      user,
+    };
+  }
+
+  const activeMembership =
+    memberships.find(
+      (membership) => membership.organizationId === activeOrganizationId,
+    ) ?? memberships[0];
+
+  return {
+    activeMembership,
+    memberships,
+    organization: activeMembership.organization,
+    organizations: memberships.map((membership) => ({
+      ...membership.organization,
+      role: membership.role,
+    })),
+    user: activeMembership.user,
+  };
+});
+
+export const getOrganizationsForUser = cache(async function getOrganizationsForUser(
+  userId: string,
+) {
   const memberships = await prisma.membership.findMany({
     where: { userId },
     include: { organization: true },
@@ -17,9 +81,11 @@ export async function getOrganizationsForUser(userId: string) {
     ...membership.organization,
     role: membership.role,
   }));
-}
+});
 
-export async function getActiveOrganization(userId: string) {
+export const getActiveOrganization = cache(async function getActiveOrganization(
+  userId: string,
+) {
   const cookieStore = await cookies();
   const activeOrganizationId = cookieStore.get(activeOrganizationCookie)?.value;
 
@@ -50,9 +116,19 @@ export async function getActiveOrganization(userId: string) {
   }
 
   return firstMembership.organization;
-}
+});
 
 export async function requireActiveOrganization(next = "/app/dashboard") {
+  const devContext = await getDevWorkspaceContext();
+
+  if (devContext) {
+    if (!devContext.organization) {
+      redirect("/onboarding/create-organization");
+    }
+
+    return devContext.organization;
+  }
+
   const user = await requireCurrentUser(next);
   const organization = await getActiveOrganization(user.id);
 
@@ -67,6 +143,27 @@ export async function requireActiveMembership(
   organizationId?: string,
   next = "/app/dashboard",
 ) {
+  const devContext = await getDevWorkspaceContext();
+
+  if (devContext) {
+    const resolvedOrganizationId =
+      organizationId ?? devContext.organization?.id ?? null;
+
+    if (!resolvedOrganizationId) {
+      redirect("/onboarding/create-organization");
+    }
+
+    const membership = devContext.memberships.find(
+      (item) => item.organizationId === resolvedOrganizationId,
+    );
+
+    if (!membership) {
+      redirect("/auth/sign-in?error=organization");
+    }
+
+    return membership;
+  }
+
   const user = await requireCurrentUser(next);
   const activeOrganization =
     organizationId ? null : await getActiveOrganization(user.id);
@@ -94,6 +191,56 @@ export async function requireActiveMembership(
   }
 
   return membership;
+}
+
+export async function requireWorkspaceContext(next = "/app/dashboard") {
+  const devContext = await getDevWorkspaceContext();
+
+  if (devContext) {
+    if (!devContext.activeMembership || !devContext.organization) {
+      redirect("/onboarding/create-organization");
+    }
+
+    return {
+      user: devContext.user,
+      organization: devContext.organization,
+      membership: devContext.activeMembership,
+      organizations: devContext.organizations,
+    };
+  }
+
+  const user = await requireCurrentUser(next);
+  const cookieStore = await cookies();
+  const activeOrganizationId = cookieStore.get(activeOrganizationCookie)?.value;
+
+  const memberships = await prisma.membership.findMany({
+    where: { userId: user.id },
+    include: {
+      customRole: true,
+      organization: true,
+      user: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (memberships.length === 0) {
+    redirect("/onboarding/create-organization");
+  }
+
+  const activeMembership =
+    memberships.find(
+      (membership) => membership.organizationId === activeOrganizationId,
+    ) ?? memberships[0];
+
+  return {
+    user,
+    organization: activeMembership.organization,
+    membership: activeMembership,
+    organizations: memberships.map((membership) => ({
+      ...membership.organization,
+      role: membership.role,
+    })),
+  };
 }
 
 export function createSlug(value: string) {

@@ -1,23 +1,22 @@
-import Link from "next/link";
 import {
-  ArrowLeft,
   CheckCircle2,
   LockKeyhole,
-  Plus,
   ShieldCheck,
   Users,
+  Plus,
 } from "lucide-react";
 
+import { AppPageShell } from "@/app/app/app-page-shell";
 import { createOrganizationRole } from "@/app/app/roles/actions";
 import {
-  requireActiveMembership,
-  requireActiveOrganization,
+  requireWorkspaceContext,
 } from "@/lib/organization";
 import {
   canManageOrganizationRoles,
   organizationPermissions,
 } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
+import { PendingButton } from "@/components/pending-button";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +26,9 @@ export default async function RolesPage({
   searchParams: Promise<{ created?: string; error?: string }>;
 }) {
   const params = await searchParams;
-  const organization = await requireActiveOrganization("/app/roles");
-  const membership = await requireActiveMembership(organization.id, "/app/roles");
-  const canManageRoles = canManageOrganizationRoles(membership.role);
+  const { organization, membership, organizations } =
+    await requireWorkspaceContext("/app/roles");
+  const canManageRoles = canManageOrganizationRoles(membership);
 
   const roles = await prisma.organizationRole.findMany({
     where: { organizationId: organization.id },
@@ -42,32 +41,15 @@ export default async function RolesPage({
   });
 
   return (
-    <main className="min-h-screen bg-[#f6f8fb] text-[#172033]">
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8">
-        <header className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <Link
-              href="/app/dashboard"
-              className="mb-4 inline-flex h-10 items-center gap-2 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9]"
-            >
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Dashboard
-            </Link>
-            <p className="text-xs font-semibold uppercase text-[#f5a623]">
-              Roles
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold">
-              {organization.name}
-            </h1>
-          </div>
-          <Link
-            href="/onboarding/create-organization"
-            className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-3 text-sm font-semibold text-white transition hover:bg-[#075bc9]"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            Organization Baru
-          </Link>
-        </header>
+    <AppPageShell
+      activePath="/app/roles"
+      activeRole={membership.customRole?.name ?? membership.role}
+      eyebrow="Roles"
+      organization={organization}
+      organizations={organizations}
+      title={organization.name}
+    >
+      <div className="mx-auto max-w-6xl">
 
         <section className="mb-6 grid gap-4 lg:grid-cols-3">
           <div className="rounded-md border border-[#dfe6ef] bg-white p-5 shadow-sm">
@@ -164,13 +146,14 @@ export default async function RolesPage({
                 </div>
               </fieldset>
 
-              <button
+              <PendingButton
                 disabled={!canManageRoles}
-                className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-4 text-sm font-semibold text-white transition hover:bg-[#075bc9] disabled:bg-[#b9c7d8]"
+                className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-4 text-sm font-semibold text-white transition hover:bg-[#075bc9] disabled:cursor-wait disabled:bg-[#b9c7d8]"
+                pendingChildren="Menyimpan role..."
               >
                 <Plus className="size-4" aria-hidden="true" />
                 Simpan Role
-              </button>
+              </PendingButton>
             </form>
           </section>
 
@@ -227,6 +210,6 @@ export default async function RolesPage({
           </section>
         </div>
       </div>
-    </main>
+    </AppPageShell>
   );
 }

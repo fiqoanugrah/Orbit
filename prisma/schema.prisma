@@ -64,6 +64,11 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum HolidayAction {
+  SKIP
+  SHIFT_NEXT
+}
+
 model Organization {
   id              String              @id @default(cuid())
   name            String
@@ -83,6 +88,7 @@ model Organization {
   pricingPlans    PricingPlan[]
   academicPeriods AcademicPeriod[]
   rooms           Room[]
+  holidays        Holiday[]
   classes         Class[]
   enrollments     Enrollment[]
   sessions        AttendanceSession[]
@@ -163,6 +169,7 @@ model Student {
   name           String
   birthDate      DateTime?
   phone          String?
+  photoUrl       String?
   notes          String?
   enrollments    Enrollment[]
   invoices       Invoice[]
@@ -182,6 +189,7 @@ model Teacher {
   name           String
   phone          String?
   email          String?
+  photoUrl       String?
   classes        Class[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -272,6 +280,22 @@ model Room {
 
   @@unique([organizationId, name])
   @@index([organizationId])
+}
+
+model Holiday {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  date           DateTime
+  action         HolidayAction @default(SKIP)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, date])
+  @@index([organizationId])
+  @@index([date])
 }
 
 model Class {

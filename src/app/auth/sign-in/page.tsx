@@ -11,9 +11,12 @@ import {
 } from "lucide-react";
 
 import { deleteOrganization, switchOrganization } from "@/app/app/actions";
-import { signInWithGoogle, signOut } from "@/app/auth/actions";
+import { signInAsDevUser, signInWithGoogle, signOut } from "@/app/auth/actions";
+import { OrbitMark } from "@/components/orbit-mark";
 import { getCurrentUser } from "@/lib/auth";
+import { isDevAuthEnabled } from "@/lib/dev-auth";
 import { getOrganizationsForUser } from "@/lib/organization";
+import { PendingButton } from "@/components/pending-button";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,7 @@ export default async function SignInPage({
   const user = await getCurrentUser();
   const organizations = user ? await getOrganizationsForUser(user.id) : [];
   const next = params.next ?? "/auth/sign-in";
+  const canUseDevLogin = isDevAuthEnabled();
 
   if (user && organizations.length === 0) {
     redirect("/onboarding/create-organization");
@@ -45,9 +49,7 @@ export default async function SignInPage({
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-8 md:px-8">
           <header className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-md bg-[#0b6ffb] text-sm font-bold text-white">
-                O
-              </span>
+              <OrbitMark className="size-10" priority />
               <span className="text-lg font-semibold">Orbit</span>
             </Link>
             <Link
@@ -80,13 +82,28 @@ export default async function SignInPage({
 
               <form action={signInWithGoogle} className="mt-5">
                 <input type="hidden" name="next" value={next} />
-                <button className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-[#d7e0ea] bg-white px-4 text-sm font-semibold text-[#172033] transition hover:bg-[#f1f5f9]">
+                <PendingButton
+                  className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-[#d7e0ea] bg-white px-4 text-sm font-semibold text-[#172033] transition hover:bg-[#f1f5f9] disabled:cursor-wait disabled:opacity-70"
+                  pendingChildren="Membuka Google..."
+                >
                   <span className="grid size-5 place-items-center rounded-sm bg-[#172033] text-xs font-bold text-white">
                     G
                   </span>
                   Lanjut dengan Google
-                </button>
+                </PendingButton>
               </form>
+
+              {canUseDevLogin ? (
+                <form action={signInAsDevUser} className="mt-3">
+                  <input type="hidden" name="next" value={next} />
+                  <PendingButton
+                    className="flex h-11 w-full items-center justify-center rounded-md bg-[#172033] px-4 text-sm font-semibold text-white transition hover:bg-[#25324a] disabled:cursor-wait disabled:bg-[#536174]"
+                    pendingChildren="Masuk..."
+                  >
+                    Masuk local dev
+                  </PendingButton>
+                </form>
+              ) : null}
             </div>
           </section>
         </div>
@@ -99,16 +116,17 @@ export default async function SignInPage({
       <div className="h-9 bg-[#35bfd0]" />
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 md:px-8">
         <Link href="/" className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-md bg-[#0b6ffb] text-sm font-bold text-white">
-            O
-          </span>
+          <OrbitMark className="size-10" priority />
           <span className="text-lg font-semibold">Orbit</span>
         </Link>
         <form action={signOut}>
-          <button className="flex h-10 items-center gap-2 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9]">
+          <PendingButton
+            className="flex h-10 items-center gap-2 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9] disabled:cursor-wait disabled:opacity-70"
+            pendingChildren="Keluar..."
+          >
             <LogOut className="size-4" aria-hidden="true" />
             Keluar
-          </button>
+          </PendingButton>
         </form>
       </header>
 
@@ -162,6 +180,12 @@ export default async function SignInPage({
             </div>
           ) : null}
 
+          {params.error === "delete-confirmation" ? (
+            <div className="rounded-md border border-[#f4c6c6] bg-[#fff4f4] p-4 text-sm font-semibold text-[#c73535] sm:col-span-2 lg:col-span-3">
+              Nama organization yang diketik belum sama.
+            </div>
+          ) : null}
+
           {organizations.map((organization) => (
             <article
               key={organization.id}
@@ -173,7 +197,15 @@ export default async function SignInPage({
                   name="organizationId"
                   value={organization.id}
                 />
-                <button className="flex w-full flex-col text-left">
+                <input
+                  type="hidden"
+                  name="redirectTo"
+                  value="/app/dashboard"
+                />
+                <PendingButton
+                  className="flex w-full flex-col text-left disabled:cursor-wait disabled:opacity-70"
+                  pendingChildren="Membuka organization..."
+                >
                   <span className="flex w-full items-start gap-3">
                     <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-md bg-[#eaf2ff] text-[#075bc9]">
                       {organization.photoUrl ? (
@@ -201,7 +233,7 @@ export default async function SignInPage({
                   <span className="mt-4 line-clamp-2 text-sm leading-6 text-[#536174]">
                     {organization.address || organization.timezone}
                   </span>
-                </button>
+                </PendingButton>
               </form>
 
               {organization.role === "OWNER" ? (
@@ -215,13 +247,27 @@ export default async function SignInPage({
                       name="organizationId"
                       value={organization.id}
                     />
+                    <input
+                      type="hidden"
+                      name="redirectTo"
+                      value="/auth/sign-in"
+                    />
                     <p className="text-xs leading-5 text-[#6b7890]">
-                      Ini akan menghapus workspace dan semua data di dalamnya.
+                      Ketik nama organization untuk menghapus workspace dan
+                      semua data di dalamnya.
                     </p>
-                    <button className="flex h-9 items-center justify-center gap-2 rounded-md border border-[#f4c6c6] bg-white px-3 text-xs font-semibold text-[#c73535] transition hover:bg-[#fff4f4]">
+                    <input
+                      name="confirmation"
+                      placeholder={organization.name}
+                      className="h-10 rounded-md border border-[#f4c6c6] bg-white px-3 text-sm outline-none focus:border-[#c73535] focus:ring-2 focus:ring-[#c73535]/15"
+                    />
+                    <PendingButton
+                      className="flex h-9 items-center justify-center gap-2 rounded-md border border-[#f4c6c6] bg-white px-3 text-xs font-semibold text-[#c73535] transition hover:bg-[#fff4f4] disabled:cursor-wait disabled:opacity-70"
+                      pendingChildren="Deleting..."
+                    >
                       <Trash2 className="size-3.5" aria-hidden="true" />
                       Delete
-                    </button>
+                    </PendingButton>
                   </form>
                 </details>
               ) : null}

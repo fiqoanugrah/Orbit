@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { signOut } from "@/app/auth/actions";
+import { OrbitMark } from "@/components/orbit-mark";
 import { getCurrentUser } from "@/lib/auth";
 import { getOrganizationsForUser } from "@/lib/organization";
 
@@ -56,9 +57,7 @@ export default async function LandingPage() {
       <header className="border-b border-[#dfe6ef] bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
           <Link href="/" className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-md bg-[#0b6ffb] text-sm font-bold text-white">
-              O
-            </span>
+            <OrbitMark className="size-10" priority />
             <span>
               <span className="block text-lg font-semibold">Orbit</span>
               <span className="block text-xs text-[#6b7890]">
