@@ -1,0 +1,7 @@
+.git
+.next
+.next.bak.*
+node_modules
+tmp
+*.log
+tsconfig.tsbuildinfo
