@@ -1,4 +1,6 @@
 import {
+  BillingAgreementStatus,
+  BillingRule,
   InvoiceStatus,
   PaymentMethod,
   PaymentStatus,
@@ -68,6 +70,19 @@ const paymentStatusLabels = {
   PENDING: "Pending",
 } satisfies Record<PaymentStatus, string>;
 
+const billingRuleLabels = {
+  MONTHLY: "Bulanan",
+  PRIVATE: "Private",
+  SEMESTER: "Semester penuh",
+  TRIAL: "Trial",
+} satisfies Record<BillingRule, string>;
+
+const billingAgreementStatusLabels = {
+  ACTIVE: "Active",
+  CANCELLED: "Cancelled",
+  ENDED: "Ended",
+} satisfies Record<BillingAgreementStatus, string>;
+
 const statusMessages = {
   created: "Invoice berhasil dibuat.",
   deleted: "Invoice berhasil dihapus.",
@@ -78,9 +93,11 @@ const statusMessages = {
 } as const;
 
 const errorMessages = {
+  "billing-agreement": "Billing agreement tidak ditemukan atau belum lengkap.",
   enrollment: "Enrollment tidak ditemukan.",
   invoice: "Invoice tidak ditemukan.",
-  "invoice-data": "Enrollment, paket harga, status, dan adjustment wajib valid.",
+  "invoice-data":
+    "Pilih billing agreement atau isi enrollment + paket harga, lalu pastikan status dan adjustment valid.",
   "invoice-dates": "Tanggal jatuh tempo harus setelah tanggal terbit.",
   "invoice-has-payments": "Invoice yang sudah punya payment tidak bisa dihapus.",
   "invoice-void": "Invoice void tidak bisa diubah atau dibayar.",
@@ -195,7 +212,8 @@ export default async function InvoicesPage({
       : {}),
   };
 
-  const [enrollments, pricingPlans, invoices] = await Promise.all([
+  const [enrollments, pricingPlans, billingAgreements, invoices] =
+    await Promise.all([
     prisma.enrollment.findMany({
       where: { organizationId: organization.id },
       include: {
@@ -212,6 +230,20 @@ export default async function InvoicesPage({
       orderBy: { name: "asc" },
       take: formOptionLimit,
     }),
+    prisma.billingAgreement.findMany({
+      where: { organizationId: organization.id },
+      include: {
+        enrollment: {
+          include: {
+            class: { include: { program: true } },
+          },
+        },
+        pricingPlan: { include: { program: true } },
+        student: true,
+      },
+      orderBy: [{ status: "asc" }, { startsAt: "desc" }],
+      take: formOptionLimit,
+    }),
     prisma.invoice.findMany({
       where: invoiceWhere,
       include: {
@@ -221,6 +253,7 @@ export default async function InvoicesPage({
             class: { include: { program: true } },
           },
         },
+        billingAgreement: true,
         lines: true,
         payments: { orderBy: { paidAt: "desc" } },
         pricingPlan: true,
@@ -232,7 +265,9 @@ export default async function InvoicesPage({
     }),
   ]);
   const canCreateInvoice =
-    canManageInvoices && enrollments.length > 0 && pricingPlans.length > 0;
+    canManageInvoices &&
+    ((enrollments.length > 0 && pricingPlans.length > 0) ||
+      billingAgreements.length > 0);
 
   return (
     <AppPageShell
@@ -257,13 +292,13 @@ export default async function InvoicesPage({
           </div>
         ) : null}
 
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(340px,0.82fr)_minmax(0,1.18fr)]">
-          <section className="min-w-0 rounded-md border border-[#dfe6ef] bg-white p-5 shadow-sm">
+        <div className="grid min-w-0 gap-6">
+          <section className="hidden min-w-0 rounded-md border border-[#dfe6ef] bg-white p-5 shadow-sm">
             <div className="border-b border-[#e6edf5] pb-5">
               <h2 className="text-lg font-semibold">Buat Invoice</h2>
               <p className="mt-1 text-sm text-[#6b7890]">
-                Invoice dibuat dari enrollment dan paket harga program yang
-                sesuai.
+                Invoice bisa dibuat manual dari enrollment + paket, atau dari
+                billing agreement student.
               </p>
               <div className="mt-4 grid gap-2 text-xs leading-5 text-[#536174]">
                 <div className="rounded-md border border-[#e6edf5] bg-[#fbfcfe] px-3 py-2">
@@ -278,11 +313,37 @@ export default async function InvoicesPage({
             </div>
 
             <form action={createInvoice} className="grid gap-4 pt-5">
+              <label className="grid gap-2 rounded-md border border-[#e6edf5] bg-[#fbfcfe] p-3">
+                <span className="text-sm font-semibold">
+                  Billing agreement
+                </span>
+                <select
+                  name="billingAgreementId"
+                  disabled={!canCreateInvoice}
+                  defaultValue=""
+                  className="h-11 w-full min-w-0 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                >
+                  <option value="">Manual tanpa agreement</option>
+                  {billingAgreements.map((agreement) => (
+                    <option key={agreement.id} value={agreement.id}>
+                      {agreement.student.name} -{" "}
+                      {agreement.enrollment?.class.name ?? "Tanpa class"} -{" "}
+                      {billingRuleLabels[agreement.billingRule]} -{" "}
+                      {formatCurrency(agreement.amount)} (
+                      {billingAgreementStatusLabels[agreement.status]})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs leading-5 text-[#6b7890]">
+                  Kalau dipilih, enrollment, paket, dan nominal invoice akan
+                  mengikuti agreement tersebut.
+                </span>
+              </label>
+
               <label className="grid gap-2">
                 <span className="text-sm font-semibold">Enrollment</span>
                 <select
                   name="enrollmentId"
-                  required
                   disabled={!canCreateInvoice}
                   defaultValue=""
                   className="h-11 w-full min-w-0 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
@@ -303,7 +364,6 @@ export default async function InvoicesPage({
                 <span className="text-sm font-semibold">Paket harga</span>
                 <select
                   name="pricingPlanId"
-                  required
                   disabled={!canCreateInvoice}
                   defaultValue=""
                   className="h-11 w-full min-w-0 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
@@ -401,6 +461,7 @@ export default async function InvoicesPage({
             <div className="mt-6 grid gap-2 rounded-md border border-[#e6edf5] bg-[#fbfcfe] p-4 text-xs text-[#6b7890] sm:grid-cols-2">
               <span>{enrollments.length} enrollment tersedia</span>
               <span>{pricingPlans.length} paket aktif tersedia</span>
+              <span>{billingAgreements.length} agreement tersedia</span>
             </div>
           </section>
 
@@ -464,6 +525,14 @@ export default async function InvoicesPage({
                             invoice.pricingPlan?.name ??
                             "Manual"}
                         </p>
+                        {invoice.billingAgreement ? (
+                          <p className="mt-1 text-xs font-semibold text-[#0b6ffb]">
+                            Dari agreement{" "}
+                            {billingRuleLabels[
+                              invoice.billingAgreement.billingRule
+                            ]}
+                          </p>
+                        ) : null}
                         <p className="mt-1 text-xs text-[#536174]">
                           Terbit {formatDate(invoice.issuedAt)} | Due{" "}
                           {formatDate(invoice.dueAt)}
@@ -501,8 +570,24 @@ export default async function InvoicesPage({
                         />
                         <div className="grid min-w-0 gap-3 md:grid-cols-2">
                           <select
+                            name="billingAgreementId"
+                            defaultValue={invoice.billingAgreementId ?? ""}
+                            disabled={!canManageInvoices || locked}
+                            className="h-10 w-full min-w-0 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                          >
+                            <option value="">Manual tanpa agreement</option>
+                            {billingAgreements.map((agreement) => (
+                              <option key={agreement.id} value={agreement.id}>
+                                {agreement.student.name} -{" "}
+                                {agreement.enrollment?.class.name ??
+                                  "Tanpa class"}{" "}
+                                - {billingRuleLabels[agreement.billingRule]} -{" "}
+                                {formatCurrency(agreement.amount)}
+                              </option>
+                            ))}
+                          </select>
+                          <select
                             name="enrollmentId"
-                            required
                             defaultValue={invoice.enrollmentId ?? ""}
                             disabled={!canManageInvoices || locked}
                             className="h-10 w-full min-w-0 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
@@ -516,7 +601,6 @@ export default async function InvoicesPage({
                           </select>
                           <select
                             name="pricingPlanId"
-                            required
                             defaultValue={invoice.pricingPlanId ?? ""}
                             disabled={!canManageInvoices || locked}
                             className="h-10 w-full min-w-0 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"

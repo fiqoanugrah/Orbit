@@ -1,4 +1,3 @@
-import { ProgramLevel } from "@prisma/client";
 import Link from "next/link";
 import {
   BookOpen,
@@ -13,10 +12,13 @@ import {
 import { AppPageShell } from "@/app/app/app-page-shell";
 import {
   createCategory,
+  createLevel,
   createProgram,
   deleteCategory,
+  deleteLevel,
   deleteProgram,
   updateCategory,
+  updateLevel,
   updateProgram,
 } from "@/app/app/programs/actions";
 import { PendingButton } from "@/components/pending-button";
@@ -27,20 +29,15 @@ import { hasOrganizationPermission } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
-const programLevelLabels = {
-  BRONZE: "Bronze",
-  SILVER: "Silver",
-  GOLD: "Gold",
-  INTERMEDIATE: "Intermediate",
-  ADVANCED: "Advanced",
-} satisfies Record<ProgramLevel, string>;
-
 const statusMessages = {
   categoryCreated: "Category berhasil ditambahkan.",
   categoryDeleted: "Category berhasil dihapus.",
   categoryUpdated: "Category berhasil diperbarui.",
   created: "Program berhasil ditambahkan.",
   deleted: "Program berhasil dihapus.",
+  levelCreated: "Level berhasil ditambahkan.",
+  levelDeleted: "Level berhasil dihapus.",
+  levelUpdated: "Level berhasil diperbarui.",
   updated: "Program berhasil diperbarui.",
 } as const;
 
@@ -49,6 +46,10 @@ const errorMessages = {
   "category-exists": "Nama category sudah dipakai.",
   "category-has-programs": "Category masih punya program.",
   "category-name": "Nama category minimal 2 karakter.",
+  level: "Level tidak ditemukan.",
+  "level-exists": "Nama level sudah dipakai.",
+  "level-has-records": "Level masih dipakai program atau student.",
+  "level-name": "Nama level minimal 2 karakter.",
   permission: "Akun kamu belum bisa mengelola program di organization ini.",
   program: "Program tidak ditemukan.",
   "program-has-records": "Program masih dipakai oleh class atau paket harga.",
@@ -63,6 +64,9 @@ type ProgramsSearchParams = {
   created?: string;
   deleted?: string;
   error?: keyof typeof errorMessages;
+  levelCreated?: string;
+  levelDeleted?: string;
+  levelUpdated?: string;
   updated?: string;
 };
 
@@ -75,12 +79,15 @@ function statusKey(params: ProgramsSearchParams) {
       "categoryCreated",
       "categoryUpdated",
       "categoryDeleted",
+      "levelCreated",
+      "levelUpdated",
+      "levelDeleted",
     ] as const
   ).find((key) => params[key]);
 }
 
-function formatLevel(level: ProgramLevel | null) {
-  return level ? programLevelLabels[level] : "Tanpa level";
+function formatLevel(level: { name: string } | null) {
+  return level?.name ?? "Tanpa level";
 }
 
 export default async function ProgramsPage({
@@ -97,16 +104,25 @@ export default async function ProgramsPage({
   );
   const activeStatus = statusKey(params);
 
-  const [categories, programs] = await Promise.all([
+  const [categories, levels, programs] = await Promise.all([
     prisma.category.findMany({
       where: { organizationId: organization.id },
       include: { _count: { select: { programs: true } } },
       orderBy: { name: "asc" },
       take: formOptionLimit,
     }),
+    prisma.academicLevel.findMany({
+      where: { organizationId: organization.id },
+      include: {
+        _count: { select: { currentStudents: true, programs: true } },
+      },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      take: formOptionLimit,
+    }),
     prisma.program.findMany({
       where: { organizationId: organization.id },
       include: {
+        academicLevel: true,
         category: true,
         _count: { select: { classes: true, pricingPlans: true } },
       },
@@ -115,6 +131,7 @@ export default async function ProgramsPage({
     }),
   ]);
   const canCreateProgram = canManagePrograms && categories.length > 0;
+  const activeLevels = levels.filter((level) => level.isActive);
 
   return (
     <AppPageShell
@@ -243,15 +260,15 @@ export default async function ProgramsPage({
                 <label className="grid gap-2">
                   <span className="text-sm font-semibold">Level</span>
                   <select
-                    name="level"
+                    name="academicLevelId"
                     disabled={!canCreateProgram}
                     className="h-11 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
                     defaultValue=""
                   >
                     <option value="">Tanpa level</option>
-                    {Object.entries(programLevelLabels).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
+                    {activeLevels.map((level) => (
+                      <option key={level.id} value={level.id}>
+                        {level.name}
                       </option>
                     ))}
                   </select>
@@ -376,19 +393,17 @@ export default async function ProgramsPage({
                         <label className="grid gap-2">
                           <span className="text-sm font-semibold">Level</span>
                           <select
-                            name="level"
+                            name="academicLevelId"
                             disabled={!canCreateProgram}
                             className="h-11 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
                             defaultValue=""
                           >
                             <option value="">Tanpa level</option>
-                            {Object.entries(programLevelLabels).map(
-                              ([value, label]) => (
-                                <option key={value} value={value}>
-                                  {label}
-                                </option>
-                              ),
-                            )}
+                            {activeLevels.map((level) => (
+                              <option key={level.id} value={level.id}>
+                                {level.name}
+                              </option>
+                            ))}
                           </select>
                         </label>
                         <div className="grid gap-4 sm:grid-cols-3">
@@ -473,7 +488,7 @@ export default async function ProgramsPage({
                             </span>
                           </div>
                           <p className="mt-2 text-xs text-[#6b7890]">
-                            {formatLevel(program.level)} |{" "}
+                            {formatLevel(program.academicLevel)} |{" "}
                             {program.sessionDuration} menit |{" "}
                             {program.totalSessions} sesi | max{" "}
                             {program.maxStudents} student
@@ -531,19 +546,17 @@ export default async function ProgramsPage({
 
                           <div className="grid gap-3 sm:grid-cols-4">
                             <select
-                              name="level"
-                              defaultValue={program.level ?? ""}
+                              name="academicLevelId"
+                              defaultValue={program.academicLevelId ?? ""}
                               disabled={!canManagePrograms}
                               className="h-10 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
                             >
                               <option value="">Tanpa level</option>
-                              {Object.entries(programLevelLabels).map(
-                                ([value, label]) => (
-                                  <option key={value} value={value}>
-                                    {label}
-                                  </option>
-                                ),
-                              )}
+                              {activeLevels.map((level) => (
+                                <option key={level.id} value={level.id}>
+                                  {level.name}
+                                </option>
+                              ))}
                             </select>
                             <input
                               name="sessionDuration"
@@ -606,6 +619,190 @@ export default async function ProgramsPage({
                         >
                           <Trash2 className="size-3.5" aria-hidden="true" />
                           Delete Program
+                        </PendingButton>
+                      </form>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rounded-md border border-[#dfe6ef] bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4 border-b border-[#e6edf5] pb-5">
+                <div>
+                  <h2 className="text-lg font-semibold">Levels</h2>
+                  <p className="mt-1 text-sm text-[#6b7890]">
+                    {levels.length} custom level tersedia untuk program dan
+                    student.
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <details className="relative">
+                    <summary className="grid size-10 cursor-pointer list-none place-items-center rounded-md bg-[#0b6ffb] text-white transition hover:bg-[#075bc9] [&::-webkit-details-marker]:hidden">
+                      <Plus className="size-5" aria-hidden="true" />
+                      <span className="sr-only">Tambah level</span>
+                    </summary>
+                    <div className="absolute right-0 z-30 mt-2 w-[min(520px,calc(100vw-2rem))] rounded-md border border-[#dfe6ef] bg-white p-5 shadow-xl">
+                      <div className="border-b border-[#e6edf5] pb-4">
+                        <h3 className="text-base font-semibold">Tambah Level</h3>
+                        <p className="mt-1 text-sm text-[#6b7890]">
+                          Buat level sesuai kurikulum organization, misalnya
+                          LV1, LV2, Pre-Bronze, atau Coding Starter.
+                        </p>
+                      </div>
+                      <form action={createLevel} className="grid gap-4 pt-5">
+                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                          <input
+                            name="name"
+                            required
+                            minLength={2}
+                            disabled={!canManagePrograms}
+                            placeholder="LV1"
+                            className="h-11 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition placeholder:text-[#9aa7b8] focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                          />
+                          <input
+                            name="sortOrder"
+                            type="number"
+                            defaultValue={levels.length + 1}
+                            disabled={!canManagePrograms}
+                            placeholder="Urutan"
+                            className="h-11 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none transition placeholder:text-[#9aa7b8] focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                          />
+                        </div>
+                        <textarea
+                          name="description"
+                          rows={3}
+                          disabled={!canManagePrograms}
+                          placeholder="Target skill atau syarat naik level"
+                          className="resize-none rounded-md border border-[#d7e0ea] bg-white px-3 py-2 text-sm outline-none transition placeholder:text-[#9aa7b8] focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                        />
+                        <PendingButton
+                          disabled={!canManagePrograms}
+                          className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0b6ffb] px-4 text-sm font-semibold text-white transition hover:bg-[#075bc9] disabled:cursor-wait disabled:bg-[#b9c7d8]"
+                          pendingChildren="Menambahkan level..."
+                        >
+                          <Layers className="size-4" aria-hidden="true" />
+                          Tambah Level
+                        </PendingButton>
+                      </form>
+                    </div>
+                  </details>
+                  <Layers className="size-5 text-[#0b6ffb]" aria-hidden="true" />
+                </div>
+              </div>
+
+              <div className="grid gap-3 pt-5 md:grid-cols-2">
+                {levels.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-[#d7e0ea] p-5 text-center text-sm text-[#6b7890] md:col-span-2">
+                    Belum ada level.
+                  </div>
+                ) : null}
+
+                {levels.map((level) => {
+                  const locked =
+                    level._count.programs > 0 ||
+                    level._count.currentStudents > 0;
+
+                  return (
+                    <article
+                      key={level.id}
+                      className="rounded-md border border-[#e6edf5] bg-[#fbfcfe] p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-sm font-semibold">
+                              {level.name}
+                            </h3>
+                            <span
+                              className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                                level.isActive
+                                  ? "bg-[#e7f8ef] text-[#16834a]"
+                                  : "bg-[#f1f5f9] text-[#6b7890]"
+                              }`}
+                            >
+                              {level.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-[#6b7890]">
+                            {level.description || "Tanpa description"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          <span className="rounded-md bg-[#eaf2ff] px-2 py-1 text-xs font-semibold text-[#075bc9]">
+                            {level._count.programs} program
+                          </span>
+                          <span className="rounded-md bg-[#fff3d8] px-2 py-1 text-xs font-semibold text-[#a56600]">
+                            {level._count.currentStudents} student
+                          </span>
+                        </div>
+                      </div>
+
+                      <details className="mt-4 border-t border-[#e6edf5] pt-3">
+                        <summary className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-[#536174]">
+                          <Pencil className="size-3.5" aria-hidden="true" />
+                          Edit level
+                        </summary>
+                        <form action={updateLevel} className="mt-3 grid gap-3">
+                          <input
+                            type="hidden"
+                            name="levelId"
+                            value={level.id}
+                          />
+                          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                            <input
+                              name="name"
+                              required
+                              minLength={2}
+                              defaultValue={level.name}
+                              disabled={!canManagePrograms}
+                              className="h-10 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                            />
+                            <input
+                              name="sortOrder"
+                              type="number"
+                              defaultValue={level.sortOrder}
+                              disabled={!canManagePrograms}
+                              className="h-10 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                            />
+                          </div>
+                          <textarea
+                            name="description"
+                            rows={2}
+                            defaultValue={level.description ?? ""}
+                            disabled={!canManagePrograms}
+                            placeholder="Description"
+                            className="resize-none rounded-md border border-[#d7e0ea] bg-white px-3 py-2 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                          />
+                          <label className="flex items-center gap-2 text-sm font-semibold text-[#536174]">
+                            <input
+                              type="checkbox"
+                              name="isActive"
+                              defaultChecked={level.isActive}
+                              disabled={!canManagePrograms}
+                              className="size-4 rounded border-[#d7e0ea]"
+                            />
+                            Active
+                          </label>
+                          <PendingButton
+                            disabled={!canManagePrograms}
+                            className="h-10 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm font-semibold text-[#536174] transition hover:bg-[#f1f5f9] disabled:cursor-wait disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
+                            pendingChildren="Saving..."
+                          >
+                            Save Level
+                          </PendingButton>
+                        </form>
+                      </details>
+
+                      <form action={deleteLevel} className="mt-3">
+                        <input type="hidden" name="levelId" value={level.id} />
+                        <PendingButton
+                          disabled={!canManagePrograms || locked}
+                          className="flex h-9 items-center gap-2 rounded-md border border-[#f4c6c6] bg-white px-3 text-xs font-semibold text-[#c73535] transition hover:bg-[#fff4f4] disabled:cursor-not-allowed disabled:bg-[#f6f8fb] disabled:text-[#d8a4a4]"
+                          pendingChildren="Deleting..."
+                        >
+                          <Trash2 className="size-3.5" aria-hidden="true" />
+                          Delete Level
                         </PendingButton>
                       </form>
                     </article>

@@ -1,6 +1,5 @@
 "use server";
 
-import { ProgramLevel } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import {
@@ -9,8 +8,6 @@ import {
 } from "@/lib/organization";
 import { prisma } from "@/lib/prisma";
 import { hasOrganizationPermission } from "@/lib/roles";
-
-const programLevels = Object.values(ProgramLevel);
 
 async function requireProgramsManager() {
   const organization = await requireActiveOrganization("/app/programs");
@@ -42,18 +39,6 @@ function getPositiveInt(formData: FormData, key: string) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function getProgramLevel(formData: FormData) {
-  const value = String(formData.get("level") ?? "").trim();
-
-  if (!value) {
-    return null;
-  }
-
-  return programLevels.includes(value as ProgramLevel)
-    ? (value as ProgramLevel)
-    : null;
-}
-
 async function requireCategory(organizationId: string, categoryId: string) {
   const category = await prisma.category.findFirst({
     where: {
@@ -68,6 +53,40 @@ async function requireCategory(organizationId: string, categoryId: string) {
   }
 
   return category;
+}
+
+async function getAcademicLevelId(
+  organizationId: string,
+  value: FormDataEntryValue | null,
+) {
+  const levelId = String(value ?? "").trim();
+
+  if (!levelId) {
+    return null;
+  }
+
+  const level = await prisma.academicLevel.findFirst({
+    where: { id: levelId, organizationId },
+    select: { id: true },
+  });
+
+  return level?.id ?? null;
+}
+
+async function requireAcademicLevel(organizationId: string, levelId: string) {
+  const level = await prisma.academicLevel.findFirst({
+    where: { id: levelId, organizationId },
+    select: {
+      id: true,
+      _count: { select: { currentStudents: true, programs: true } },
+    },
+  });
+
+  if (!level) {
+    redirect("/app/programs?error=level");
+  }
+
+  return level;
 }
 
 export async function createCategory(formData: FormData) {
@@ -168,6 +187,91 @@ export async function deleteCategory(formData: FormData) {
   redirect("/app/programs?categoryDeleted=1");
 }
 
+export async function createLevel(formData: FormData) {
+  const organization = await requireProgramsManager();
+  const name = getText(formData, "name");
+  const description = getText(formData, "description");
+  const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "0"), 10);
+
+  if (!name || name.length < 2) {
+    redirect("/app/programs?error=level-name");
+  }
+
+  const existingLevel = await prisma.academicLevel.findFirst({
+    where: { organizationId: organization.id, name },
+    select: { id: true },
+  });
+
+  if (existingLevel) {
+    redirect("/app/programs?error=level-exists");
+  }
+
+  await prisma.academicLevel.create({
+    data: {
+      organizationId: organization.id,
+      name,
+      description,
+      sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+    },
+  });
+
+  redirect("/app/programs?levelCreated=1");
+}
+
+export async function updateLevel(formData: FormData) {
+  const organization = await requireProgramsManager();
+  const levelId = String(formData.get("levelId") ?? "").trim();
+  const name = getText(formData, "name");
+  const description = getText(formData, "description");
+  const sortOrder = Number.parseInt(String(formData.get("sortOrder") ?? "0"), 10);
+  const isActive = formData.get("isActive") === "on";
+
+  if (!name || name.length < 2) {
+    redirect("/app/programs?error=level-name");
+  }
+
+  await requireAcademicLevel(organization.id, levelId);
+
+  const existingLevel = await prisma.academicLevel.findFirst({
+    where: {
+      organizationId: organization.id,
+      name,
+      NOT: { id: levelId },
+    },
+    select: { id: true },
+  });
+
+  if (existingLevel) {
+    redirect("/app/programs?error=level-exists");
+  }
+
+  await prisma.academicLevel.update({
+    where: { id: levelId },
+    data: {
+      name,
+      description,
+      sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+      isActive,
+    },
+  });
+
+  redirect("/app/programs?levelUpdated=1");
+}
+
+export async function deleteLevel(formData: FormData) {
+  const organization = await requireProgramsManager();
+  const levelId = String(formData.get("levelId") ?? "").trim();
+  const level = await requireAcademicLevel(organization.id, levelId);
+
+  if (level._count.programs > 0 || level._count.currentStudents > 0) {
+    redirect("/app/programs?error=level-has-records");
+  }
+
+  await prisma.academicLevel.delete({ where: { id: level.id } });
+
+  redirect("/app/programs?levelDeleted=1");
+}
+
 function getProgramPayload(formData: FormData) {
   const name = getText(formData, "name");
   const categoryId = String(formData.get("categoryId") ?? "").trim();
@@ -176,9 +280,9 @@ function getProgramPayload(formData: FormData) {
   const maxStudents = getPositiveInt(formData, "maxStudents");
 
   return {
+    academicLevelId: String(formData.get("academicLevelId") ?? "").trim(),
     categoryId,
     description: getText(formData, "description"),
-    level: getProgramLevel(formData),
     maxStudents,
     name,
     sessionDuration,
@@ -203,13 +307,17 @@ export async function createProgram(formData: FormData) {
   }
 
   await requireCategory(organization.id, data.categoryId);
+  const academicLevelId = await getAcademicLevelId(
+    organization.id,
+    data.academicLevelId,
+  );
 
   await prisma.program.create({
     data: {
       organizationId: organization.id,
       categoryId: data.categoryId,
+      academicLevelId,
       name: data.name,
-      level: data.level,
       sessionDuration: data.sessionDuration,
       totalSessions: data.totalSessions,
       maxStudents: data.maxStudents,
@@ -250,13 +358,17 @@ export async function updateProgram(formData: FormData) {
   }
 
   await requireCategory(organization.id, data.categoryId);
+  const academicLevelId = await getAcademicLevelId(
+    organization.id,
+    data.academicLevelId,
+  );
 
   await prisma.program.update({
     where: { id: program.id },
     data: {
       categoryId: data.categoryId,
+      academicLevelId,
       name: data.name,
-      level: data.level,
       sessionDuration: data.sessionDuration,
       totalSessions: data.totalSessions,
       maxStudents: data.maxStudents,

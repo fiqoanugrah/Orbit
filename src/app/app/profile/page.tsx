@@ -81,6 +81,12 @@ export default async function ProfilePage({
               </div>
             ) : null}
 
+            {params.error === "photo" ? (
+              <div className="mt-5 rounded-md bg-[#ffecec] px-3 py-2 text-sm font-medium text-[#c73535]">
+                Foto / logo harus image dan maksimal 5 MB.
+              </div>
+            ) : null}
+
             <form
               action={updateOrganizationProfile}
               className="grid gap-4 pt-5"

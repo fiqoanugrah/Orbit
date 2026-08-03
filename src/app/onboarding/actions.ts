@@ -10,7 +10,11 @@ import {
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultOrganizationRoles } from "@/lib/roles";
-import { saveOrganizationPhoto } from "@/lib/upload";
+import {
+  saveOrganizationPhoto,
+  UploadError,
+  validatePhotoFile,
+} from "@/lib/upload";
 
 export async function createOrganization(formData: FormData) {
   const owner = await requireCurrentUser("/onboarding/create-organization");
@@ -23,6 +27,16 @@ export async function createOrganization(formData: FormData) {
 
   if (name.length < 2) {
     redirect("/onboarding/create-organization?error=name");
+  }
+
+  try {
+    validatePhotoFile(photo instanceof File ? photo : null, "Organization");
+  } catch (error) {
+    if (error instanceof UploadError) {
+      redirect("/onboarding/create-organization?error=photo");
+    }
+
+    throw error;
   }
 
   const organization = await prisma.organization.create({

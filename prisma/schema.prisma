@@ -64,39 +64,48 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum BillingAgreementStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
 enum HolidayAction {
   SKIP
   SHIFT_NEXT
 }
 
 model Organization {
-  id              String              @id @default(cuid())
-  name            String
-  slug            String              @unique
-  phone           String?
-  email           String?
-  address         String?
-  photoUrl        String?
-  timezone        String              @default("Asia/Jakarta")
-  memberships     Membership[]
-  roles           OrganizationRole[]
-  parents         Parent[]
-  students        Student[]
-  teachers        Teacher[]
-  categories      Category[]
-  programs        Program[]
-  pricingPlans    PricingPlan[]
-  academicPeriods AcademicPeriod[]
-  rooms           Room[]
-  holidays        Holiday[]
-  classes         Class[]
-  enrollments     Enrollment[]
-  sessions        AttendanceSession[]
-  attendance      AttendanceRecord[]
-  invoices        Invoice[]
-  payments        Payment[]
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id                    String                @id @default(cuid())
+  name                  String
+  slug                  String                @unique
+  phone                 String?
+  email                 String?
+  address               String?
+  photoUrl              String?
+  timezone              String                @default("Asia/Jakarta")
+  memberships           Membership[]
+  roles                 OrganizationRole[]
+  parents               Parent[]
+  students              Student[]
+  teachers              Teacher[]
+  academicLevels        AcademicLevel[]
+  categories            Category[]
+  programs              Program[]
+  pricingPlans          PricingPlan[]
+  academicPeriods       AcademicPeriod[]
+  rooms                 Room[]
+  holidays              Holiday[]
+  classes               Class[]
+  enrollments           Enrollment[]
+  billingAgreements     BillingAgreement[]
+  sessions              AttendanceSession[]
+  attendance            AttendanceRecord[]
+  invoices              Invoice[]
+  payments              Payment[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  studentLevelHistories StudentLevelHistory[]
 }
 
 model User {
@@ -111,16 +120,16 @@ model User {
 }
 
 model Membership {
-  id             String       @id @default(cuid())
+  id             String            @id @default(cuid())
   organizationId String
   userId         String
   customRoleId   String?
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   customRole     OrganizationRole? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
   role           UserRole
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@unique([organizationId, userId])
   @@index([organizationId])
@@ -161,23 +170,49 @@ model Parent {
 }
 
 model Student {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parentId       String?
-  parent         Parent?      @relation(fields: [parentId], references: [id], onDelete: SetNull)
-  name           String
-  birthDate      DateTime?
-  phone          String?
-  photoUrl       String?
-  notes          String?
-  enrollments    Enrollment[]
-  invoices       Invoice[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                String                @id @default(cuid())
+  organizationId    String
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentId          String?
+  parent            Parent?               @relation(fields: [parentId], references: [id], onDelete: SetNull)
+  name              String
+  birthDate         DateTime?
+  phone             String?
+  photoUrl          String?
+  currentLevelId    String?
+  currentLevel      AcademicLevel?        @relation("StudentCurrentLevel", fields: [currentLevelId], references: [id], onDelete: SetNull)
+  notes             String?
+  enrollments       Enrollment[]
+  billingAgreements BillingAgreement[]
+  levelHistory      StudentLevelHistory[]
+  invoices          Invoice[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
   @@index([organizationId])
   @@index([parentId])
+  @@index([currentLevelId])
+}
+
+model AcademicLevel {
+  id              String                @id @default(cuid())
+  organizationId  String
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  sortOrder       Int                   @default(0)
+  isActive        Boolean               @default(true)
+  programs        Program[]
+  currentStudents Student[]             @relation("StudentCurrentLevel")
+  historiesFrom   StudentLevelHistory[] @relation("LevelHistoryFrom")
+  historiesTo     StudentLevelHistory[] @relation("LevelHistoryTo")
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([sortOrder])
+  @@map("academic_levels")
 }
 
 model Teacher {
@@ -212,11 +247,13 @@ model Category {
 }
 
 model Program {
-  id              String        @id @default(cuid())
+  id              String         @id @default(cuid())
   organizationId  String
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   categoryId      String
-  category        Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  academicLevelId String?
+  category        Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  academicLevel   AcademicLevel? @relation(fields: [academicLevelId], references: [id], onDelete: SetNull)
   name            String
   level           ProgramLevel?
   sessionDuration Int
@@ -225,26 +262,50 @@ model Program {
   description     String?
   pricingPlans    PricingPlan[]
   classes         Class[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([organizationId])
   @@index([categoryId])
+  @@index([academicLevelId])
+}
+
+model StudentLevelHistory {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fromLevelId    String?
+  fromLevel      AcademicLevel? @relation("LevelHistoryFrom", fields: [fromLevelId], references: [id], onDelete: SetNull)
+  toLevelId      String?
+  toLevel        AcademicLevel? @relation("LevelHistoryTo", fields: [toLevelId], references: [id], onDelete: SetNull)
+  effectiveAt    DateTime       @default(now())
+  notes          String?
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId])
+  @@index([studentId])
+  @@index([fromLevelId])
+  @@index([toLevelId])
+  @@index([effectiveAt])
+  @@map("student_level_history")
 }
 
 model PricingPlan {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  programId      String
-  program        Program      @relation(fields: [programId], references: [id], onDelete: Restrict)
-  name           String
-  price          Int
-  billingRule    BillingRule
-  isActive       Boolean      @default(true)
-  invoices       Invoice[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                String             @id @default(cuid())
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  programId         String
+  program           Program            @relation(fields: [programId], references: [id], onDelete: Restrict)
+  name              String
+  price             Int
+  billingRule       BillingRule
+  isActive          Boolean            @default(true)
+  billingAgreements BillingAgreement[]
+  invoices          Invoice[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@index([organizationId])
   @@index([programId])
@@ -252,17 +313,18 @@ model PricingPlan {
 }
 
 model AcademicPeriod {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  startsAt       DateTime?
-  endsAt         DateTime?
-  classes        Class[]
-  enrollments    Enrollment[]
-  invoices       Invoice[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                String             @id @default(cuid())
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  startsAt          DateTime?
+  endsAt            DateTime?
+  classes           Class[]
+  enrollments       Enrollment[]
+  billingAgreements BillingAgreement[]
+  invoices          Invoice[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -327,27 +389,59 @@ model Class {
 }
 
 model Enrollment {
-  id               String             @id @default(cuid())
-  organizationId   String
-  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  studentId        String
-  classId          String
-  academicPeriodId String
-  student          Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  class            Class              @relation(fields: [classId], references: [id], onDelete: Restrict)
-  academicPeriod   AcademicPeriod     @relation(fields: [academicPeriodId], references: [id], onDelete: Restrict)
-  status           EnrollmentStatus   @default(ACTIVE)
-  joinedAt         DateTime           @default(now())
-  endedAt          DateTime?
-  invoices         Invoice[]
-  attendance       AttendanceRecord[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                String             @id @default(cuid())
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentId         String
+  classId           String
+  academicPeriodId  String
+  student           Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  class             Class              @relation(fields: [classId], references: [id], onDelete: Restrict)
+  academicPeriod    AcademicPeriod     @relation(fields: [academicPeriodId], references: [id], onDelete: Restrict)
+  status            EnrollmentStatus   @default(ACTIVE)
+  joinedAt          DateTime           @default(now())
+  endedAt           DateTime?
+  billingAgreements BillingAgreement[]
+  invoices          Invoice[]
+  attendance        AttendanceRecord[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@unique([studentId, classId, academicPeriodId])
   @@index([organizationId])
   @@index([classId])
   @@index([academicPeriodId])
+}
+
+model BillingAgreement {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentId        String
+  student          Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enrollmentId     String?
+  enrollment       Enrollment?            @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  pricingPlanId    String?
+  pricingPlan      PricingPlan?           @relation(fields: [pricingPlanId], references: [id], onDelete: SetNull)
+  academicPeriodId String?
+  academicPeriod   AcademicPeriod?        @relation(fields: [academicPeriodId], references: [id], onDelete: SetNull)
+  billingRule      BillingRule
+  status           BillingAgreementStatus @default(ACTIVE)
+  startsAt         DateTime
+  endsAt           DateTime?
+  amount           Int
+  notes            String?
+  invoices         Invoice[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([studentId])
+  @@index([enrollmentId])
+  @@index([pricingPlanId])
+  @@index([academicPeriodId])
+  @@index([status])
+  @@map("billing_agreements")
 }
 
 model AttendanceSession {
@@ -386,36 +480,39 @@ model AttendanceRecord {
 }
 
 model Invoice {
-  id               String          @id @default(cuid())
-  organizationId   String
-  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invoiceNumber    String
-  studentId        String
-  enrollmentId     String?
-  pricingPlanId    String?
-  academicPeriodId String?
-  student          Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  enrollment       Enrollment?     @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
-  pricingPlan      PricingPlan?    @relation(fields: [pricingPlanId], references: [id], onDelete: SetNull)
-  academicPeriod   AcademicPeriod? @relation(fields: [academicPeriodId], references: [id], onDelete: SetNull)
-  status           InvoiceStatus   @default(DRAFT)
-  subtotal         Int
-  adjustmentAmount Int             @default(0)
-  total            Int
-  issuedAt         DateTime?
-  dueAt            DateTime?
-  voidedAt         DateTime?
-  voidReason       String?
-  lines            InvoiceLine[]
-  payments         Payment[]
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                 String            @id @default(cuid())
+  organizationId     String
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceNumber      String
+  studentId          String
+  enrollmentId       String?
+  pricingPlanId      String?
+  academicPeriodId   String?
+  billingAgreementId String?
+  student            Student           @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  enrollment         Enrollment?       @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  pricingPlan        PricingPlan?      @relation(fields: [pricingPlanId], references: [id], onDelete: SetNull)
+  academicPeriod     AcademicPeriod?   @relation(fields: [academicPeriodId], references: [id], onDelete: SetNull)
+  billingAgreement   BillingAgreement? @relation(fields: [billingAgreementId], references: [id], onDelete: SetNull)
+  status             InvoiceStatus     @default(DRAFT)
+  subtotal           Int
+  adjustmentAmount   Int               @default(0)
+  total              Int
+  issuedAt           DateTime?
+  dueAt              DateTime?
+  voidedAt           DateTime?
+  voidReason         String?
+  lines              InvoiceLine[]
+  payments           Payment[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   @@unique([organizationId, invoiceNumber])
   @@index([organizationId])
   @@index([studentId])
   @@index([enrollmentId])
   @@index([pricingPlanId])
+  @@index([billingAgreementId])
   @@index([status])
 }
 

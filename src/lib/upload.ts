@@ -5,6 +5,27 @@ import { createClient } from "@supabase/supabase-js";
 const maxUploadSize = 5 * 1024 * 1024;
 const organizationAssetsBucket = "organization-assets";
 
+export class UploadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UploadError";
+  }
+}
+
+export function validatePhotoFile(file: File | null, errorLabel: string) {
+  if (!file || file.size === 0) {
+    return;
+  }
+
+  if (!file.type.startsWith("image/")) {
+    throw new UploadError(`${errorLabel} photo must be an image.`);
+  }
+
+  if (file.size > maxUploadSize) {
+    throw new UploadError(`${errorLabel} photo must be smaller than 5 MB.`);
+  }
+}
+
 function getSupabaseStorageClient() {
   const supabaseUrl =
     process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -115,13 +136,7 @@ async function savePhoto({
     return null;
   }
 
-  if (!file.type.startsWith("image/")) {
-    throw new Error(`${errorLabel} photo must be an image.`);
-  }
-
-  if (file.size > maxUploadSize) {
-    throw new Error(`${errorLabel} photo must be smaller than 5 MB.`);
-  }
+  validatePhotoFile(file, errorLabel);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";

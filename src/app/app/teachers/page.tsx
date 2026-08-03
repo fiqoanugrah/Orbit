@@ -33,6 +33,7 @@ const statusMessages = {
 const errorMessages = {
   permission: "Akun kamu belum bisa mengelola teacher di organization ini.",
   name: "Nama teacher minimal 2 karakter.",
+  photo: "Foto teacher harus image dan maksimal 5 MB.",
   teacher: "Teacher tidak ditemukan.",
   "teacher-has-classes": "Teacher masih dipakai oleh class.",
 } as const;

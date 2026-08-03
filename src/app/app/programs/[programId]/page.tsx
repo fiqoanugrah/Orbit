@@ -1,4 +1,3 @@
-import { ProgramLevel } from "@prisma/client";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -21,16 +20,8 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const programLevelLabels = {
-  BRONZE: "Bronze",
-  SILVER: "Silver",
-  GOLD: "Gold",
-  INTERMEDIATE: "Intermediate",
-  ADVANCED: "Advanced",
-} satisfies Record<ProgramLevel, string>;
-
-function formatLevel(level: ProgramLevel | null) {
-  return level ? programLevelLabels[level] : "Tanpa level";
+function formatLevel(level: { name: string } | null) {
+  return level?.name ?? "Tanpa level";
 }
 
 function formatCurrency(value: number) {
@@ -54,10 +45,11 @@ export default async function ProgramDetailPage({
     "classes.manage",
   );
 
-  const [program, programs, categories] = await Promise.all([
+  const [program, programs, categories, levels] = await Promise.all([
     prisma.program.findFirst({
       where: { id: programId, organizationId: organization.id },
       include: {
+        academicLevel: true,
         category: true,
         classes: {
           include: { academicPeriod: true, teacher: true },
@@ -71,6 +63,7 @@ export default async function ProgramDetailPage({
     prisma.program.findMany({
       where: { organizationId: organization.id },
       include: {
+        academicLevel: true,
         category: true,
         _count: { select: { classes: true, pricingPlans: true } },
       },
@@ -80,6 +73,11 @@ export default async function ProgramDetailPage({
     prisma.category.findMany({
       where: { organizationId: organization.id },
       orderBy: { name: "asc" },
+      take: formOptionLimit,
+    }),
+    prisma.academicLevel.findMany({
+      where: { organizationId: organization.id, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       take: formOptionLimit,
     }),
   ]);
@@ -135,7 +133,7 @@ export default async function ProgramDetailPage({
                       {item.name}
                     </h3>
                     <p className="mt-1 truncate text-xs text-[#6b7890]">
-                      {item.category.name} - {formatLevel(item.level)}
+                      {item.category.name} - {formatLevel(item.academicLevel)}
                     </p>
                   </div>
                   <span className="rounded-md bg-[#eaf2ff] px-2 py-1 text-[11px] font-semibold text-[#075bc9]">
@@ -189,15 +187,15 @@ export default async function ProgramDetailPage({
               </div>
               <div className="grid gap-4 md:grid-cols-4">
                 <select
-                  name="level"
-                  defaultValue={program.level ?? ""}
+                  name="academicLevelId"
+                  defaultValue={program.academicLevelId ?? ""}
                   disabled={!canManagePrograms}
                   className="h-11 w-full min-w-0 rounded-md border border-[#d7e0ea] bg-white px-3 text-sm outline-none focus:border-[#0b6ffb] focus:ring-2 focus:ring-[#0b6ffb]/15 disabled:bg-[#f6f8fb] disabled:text-[#9aa7b8]"
                 >
                   <option value="">Tanpa level</option>
-                  {Object.entries(programLevelLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
+                  {levels.map((level) => (
+                    <option key={level.id} value={level.id}>
+                      {level.name}
                     </option>
                   ))}
                 </select>
@@ -250,7 +248,10 @@ export default async function ProgramDetailPage({
             <div className="grid gap-6 md:grid-cols-3">
               <DetailField label="Name" value={program.name} />
               <DetailField label="Category" value={program.category.name} />
-              <DetailField label="Level" value={formatLevel(program.level)} />
+              <DetailField
+                label="Level"
+                value={formatLevel(program.academicLevel)}
+              />
               <DetailField
                 label="Duration"
                 value={`${program.sessionDuration} menit`}

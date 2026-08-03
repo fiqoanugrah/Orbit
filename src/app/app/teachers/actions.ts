@@ -8,7 +8,7 @@ import {
 } from "@/lib/organization";
 import { prisma } from "@/lib/prisma";
 import { hasOrganizationPermission } from "@/lib/roles";
-import { saveTeacherPhoto } from "@/lib/upload";
+import { saveTeacherPhoto, UploadError } from "@/lib/upload";
 
 async function requireTeachersManager() {
   const organization = await requireActiveOrganization("/app/teachers");
@@ -28,6 +28,16 @@ function getTeachersRedirect(formData: FormData, fallback: string) {
   const redirectTo = String(formData.get("redirectTo") ?? "").trim();
 
   return redirectTo.startsWith("/app/teachers") ? redirectTo : fallback;
+}
+
+function withStatusParam(path: string, key: string, value: string) {
+  const url = new URL(path, "http://orbit.local");
+  url.searchParams.delete("created");
+  url.searchParams.delete("updated");
+  url.searchParams.delete("deleted");
+  url.searchParams.set(key, value);
+
+  return `${url.pathname}${url.search}`;
 }
 
 async function getTeacherPayload(organizationId: string, formData: FormData) {
@@ -50,7 +60,17 @@ async function getTeacherPayload(organizationId: string, formData: FormData) {
 
 export async function createTeacher(formData: FormData) {
   const organization = await requireTeachersManager();
-  const data = await getTeacherPayload(organization.id, formData);
+  let data: Awaited<ReturnType<typeof getTeacherPayload>>;
+
+  try {
+    data = await getTeacherPayload(organization.id, formData);
+  } catch (error) {
+    if (error instanceof UploadError) {
+      redirect("/app/teachers?error=photo");
+    }
+
+    throw error;
+  }
 
   if (data.name.length < 2) {
     redirect("/app/teachers?error=name");
@@ -72,7 +92,18 @@ export async function createTeacher(formData: FormData) {
 export async function updateTeacher(formData: FormData) {
   const organization = await requireTeachersManager();
   const teacherId = String(formData.get("teacherId") ?? "").trim();
-  const data = await getTeacherPayload(organization.id, formData);
+  const redirectTo = getTeachersRedirect(formData, "/app/teachers?updated=1");
+  let data: Awaited<ReturnType<typeof getTeacherPayload>>;
+
+  try {
+    data = await getTeacherPayload(organization.id, formData);
+  } catch (error) {
+    if (error instanceof UploadError) {
+      redirect(withStatusParam(redirectTo, "error", "photo"));
+    }
+
+    throw error;
+  }
 
   if (data.name.length < 2) {
     redirect("/app/teachers?error=name");
@@ -100,7 +131,7 @@ export async function updateTeacher(formData: FormData) {
     },
   });
 
-  redirect(getTeachersRedirect(formData, "/app/teachers?updated=1"));
+  redirect(redirectTo);
 }
 
 export async function deleteTeacher(formData: FormData) {

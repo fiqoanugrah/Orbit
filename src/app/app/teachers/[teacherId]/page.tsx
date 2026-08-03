@@ -34,10 +34,13 @@ const dayLabels = [
 
 export default async function TeacherDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ teacherId: string }>;
+  searchParams: Promise<{ error?: string; updated?: string }>;
 }) {
   const { teacherId } = await params;
+  const statusParams = await searchParams;
   const { organization, membership, organizations } =
     await requireWorkspaceContext(`/app/teachers/${teacherId}`);
   const canManageTeachers = hasOrganizationPermission(
@@ -150,6 +153,18 @@ export default async function TeacherDetailPage({
             <ArrowLeft className="size-4" aria-hidden="true" />
             Back to Teachers
           </Link>
+
+          {statusParams.updated ? (
+            <div className="rounded-md bg-[#e7f8ef] px-3 py-2 text-sm font-semibold text-[#16834a]">
+              Teacher berhasil diperbarui.
+            </div>
+          ) : null}
+
+          {statusParams.error === "photo" ? (
+            <div className="rounded-md bg-[#ffecec] px-3 py-2 text-sm font-medium text-[#c73535]">
+              Foto teacher harus image dan maksimal 5 MB.
+            </div>
+          ) : null}
 
           <DetailCard icon={GraduationCap} title="Teacher Summary">
             <div className="flex flex-col gap-5 md:flex-row md:items-center">

@@ -9,7 +9,7 @@ import {
 } from "@/lib/organization";
 import { prisma } from "@/lib/prisma";
 import { hasOrganizationPermission } from "@/lib/roles";
-import { saveStudentPhoto } from "@/lib/upload";
+import { saveStudentPhoto, UploadError } from "@/lib/upload";
 
 export type StudentActionState = {
   message: string | null;
@@ -64,6 +64,35 @@ async function getParentId(organizationId: string, value: FormDataEntryValue | n
   return parent?.id ?? null;
 }
 
+async function getAcademicLevelId(
+  organizationId: string,
+  value: FormDataEntryValue | null,
+) {
+  const levelId = String(value ?? "").trim();
+
+  if (!levelId) {
+    return null;
+  }
+
+  const level = await prisma.academicLevel.findFirst({
+    where: { id: levelId, organizationId, isActive: true },
+    select: { id: true },
+  });
+
+  return level?.id ?? null;
+}
+
+function getDate(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? "").trim();
+
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 async function getStudentPayload(organizationId: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
@@ -91,7 +120,17 @@ export async function createStudent(
   formData: FormData,
 ): Promise<StudentActionState> {
   const organization = await requireStudentsManager();
-  const data = await getStudentPayload(organization.id, formData);
+  let data: Awaited<ReturnType<typeof getStudentPayload>>;
+
+  try {
+    data = await getStudentPayload(organization.id, formData);
+  } catch (error) {
+    if (error instanceof UploadError) {
+      return actionError(error.message);
+    }
+
+    throw error;
+  }
 
   if (data.name.length < 2) {
     return actionError("Nama student minimal 2 karakter.");
@@ -118,7 +157,17 @@ export async function updateStudent(
 ): Promise<StudentActionState> {
   const organization = await requireStudentsManager();
   const studentId = String(formData.get("studentId") ?? "").trim();
-  const data = await getStudentPayload(organization.id, formData);
+  let data: Awaited<ReturnType<typeof getStudentPayload>>;
+
+  try {
+    data = await getStudentPayload(organization.id, formData);
+  } catch (error) {
+    if (error instanceof UploadError) {
+      return actionError(error.message);
+    }
+
+    throw error;
+  }
 
   if (data.name.length < 2) {
     return actionError("Nama student minimal 2 karakter.");
@@ -189,4 +238,52 @@ export async function deleteStudent(
   });
 
   return actionSuccess("Student berhasil dihapus.");
+}
+
+export async function updateStudentLevel(formData: FormData) {
+  const organization = await requireStudentsManager();
+  const studentId = String(formData.get("studentId") ?? "").trim();
+  const levelId = await getAcademicLevelId(
+    organization.id,
+    formData.get("levelId"),
+  );
+  const effectiveAt = getDate(formData, "effectiveAt") ?? new Date();
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const redirectTo = `/app/students/${studentId}`;
+
+  const student = await prisma.student.findFirst({
+    where: {
+      id: studentId,
+      organizationId: organization.id,
+    },
+    select: { currentLevelId: true, id: true },
+  });
+
+  if (!student) {
+    redirect("/app/students?error=student");
+  }
+
+  if (student.currentLevelId === levelId) {
+    redirect(`${redirectTo}?levelUnchanged=1`);
+  }
+
+  await prisma.$transaction([
+    prisma.student.update({
+      where: { id: student.id },
+      data: { currentLevelId: levelId },
+    }),
+    prisma.studentLevelHistory.create({
+      data: {
+        organizationId: organization.id,
+        studentId: student.id,
+        fromLevelId: student.currentLevelId,
+        toLevelId: levelId,
+        effectiveAt,
+        notes,
+      },
+    }),
+  ]);
+
+  revalidatePath(redirectTo);
+  redirect(`${redirectTo}?levelUpdated=1`);
 }

@@ -100,6 +100,12 @@ export default async function CreateOrganizationPage({
                 ) : null}
               </label>
 
+              {params.error === "photo" ? (
+                <div className="rounded-md bg-[#ffecec] px-3 py-2 text-sm font-medium text-[#c73535]">
+                  Foto / logo harus image dan maksimal 5 MB.
+                </div>
+              ) : null}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="grid gap-2">
                   <span className="text-sm font-semibold">Nomor WhatsApp</span>

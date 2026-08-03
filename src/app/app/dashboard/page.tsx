@@ -84,8 +84,8 @@ type DashboardMetricRow = {
   activeStudents: number;
   attendanceRate: number;
   label: string;
-  monthStart: Date;
   newStudents: number;
+  periodStart: Date;
   revenue: number;
 };
 
@@ -112,7 +112,8 @@ export default async function DashboardPage() {
   const [
     summaryRows,
     activeClasses,
-    metricRows,
+    monthlyMetricRows,
+    weeklyMetricRows,
     financeRows,
     recentStudents,
     recentAttendance,
@@ -182,7 +183,7 @@ export default async function DashboardPage() {
         GROUP BY date_trunc('month', s.date)::date
       )
       SELECT
-        m.month_start AS "monthStart",
+        m.month_start AS "periodStart",
         to_char(m.month_start, 'Mon') AS label,
         (
           SELECT COUNT(*)::int
@@ -220,6 +221,67 @@ export default async function DashboardPage() {
       FROM months m
       LEFT JOIN attendance ON attendance.month_start = m.month_start
       ORDER BY m.month_start ASC
+    `,
+    prisma.$queryRaw<DashboardMetricRow[]>`
+      WITH days AS (
+        SELECT
+          (
+            date_trunc('week', CURRENT_DATE)
+            + (series.index * interval '1 day')
+          )::date AS day_start
+        FROM generate_series(0, 6, 1) AS series(index)
+      ),
+      attendance AS (
+        SELECT
+          s.date::date AS day_start,
+          COUNT(ar.id)::int AS total_records,
+          COUNT(ar.id) FILTER (WHERE ar.status = 'PRESENT')::int AS present_records
+        FROM "AttendanceSession" s
+        LEFT JOIN "AttendanceRecord" ar ON ar."sessionId" = s.id
+        WHERE s."organizationId" = ${organizationId}
+          AND s.date >= (SELECT MIN(day_start) FROM days)
+          AND s.date < ((SELECT MAX(day_start) FROM days) + interval '1 day')
+        GROUP BY s.date::date
+      )
+      SELECT
+        d.day_start AS "periodStart",
+        to_char(d.day_start, 'Dy DD') AS label,
+        (
+          SELECT COUNT(*)::int
+          FROM "Student" student
+          WHERE student."organizationId" = ${organizationId}
+            AND student."createdAt" >= d.day_start
+            AND student."createdAt" < (d.day_start + interval '1 day')
+        ) AS "newStudents",
+        (
+          SELECT COUNT(DISTINCT enrollment."studentId")::int
+          FROM "Enrollment" enrollment
+          WHERE enrollment."organizationId" = ${organizationId}
+            AND enrollment.status = 'ACTIVE'
+            AND enrollment."joinedAt" < (d.day_start + interval '1 day')
+            AND (
+              enrollment."endedAt" IS NULL
+              OR enrollment."endedAt" >= d.day_start
+            )
+        ) AS "activeStudents",
+        COALESCE((
+          SELECT SUM(payment.amount)::int
+          FROM "Payment" payment
+          WHERE payment."organizationId" = ${organizationId}
+            AND payment.status = 'CONFIRMED'
+            AND payment."paidAt" >= d.day_start
+            AND payment."paidAt" < (d.day_start + interval '1 day')
+        ), 0) AS revenue,
+        COALESCE(
+          ROUND(
+            (attendance.present_records::numeric / NULLIF(attendance.total_records, 0))
+            * 100
+          )::int,
+          0
+        ) AS "attendanceRate"
+      FROM days d
+      LEFT JOIN attendance ON attendance.day_start = d.day_start
+      ORDER BY d.day_start ASC
     `,
     prisma.invoice.findMany({
       where: { organizationId },
@@ -287,7 +349,14 @@ export default async function DashboardPage() {
     presentCount: 0,
     studentCount: 0,
   };
-  const metricData = metricRows.map((row) => ({
+  const monthlyMetricData = monthlyMetricRows.map((row) => ({
+    activeStudents: Number(row.activeStudents),
+    attendanceRate: Number(row.attendanceRate),
+    label: row.label.trim(),
+    newStudents: Number(row.newStudents),
+    revenue: Number(row.revenue),
+  }));
+  const weeklyMetricData = weeklyMetricRows.map((row) => ({
     activeStudents: Number(row.activeStudents),
     attendanceRate: Number(row.attendanceRate),
     label: row.label.trim(),
@@ -424,7 +493,10 @@ export default async function DashboardPage() {
               ))}
             </section>
 
-            <DashboardMetricsChart data={metricData} />
+            <DashboardMetricsChart
+              monthlyData={monthlyMetricData}
+              weeklyData={weeklyMetricData}
+            />
 
             <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
               <div className="space-y-6">

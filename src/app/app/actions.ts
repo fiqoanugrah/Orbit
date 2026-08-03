@@ -11,7 +11,7 @@ import {
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasOrganizationPermission } from "@/lib/roles";
-import { saveOrganizationPhoto } from "@/lib/upload";
+import { saveOrganizationPhoto, UploadError } from "@/lib/upload";
 
 function getSafeRedirectPath(value: FormDataEntryValue | null) {
   const redirectTo = String(value ?? "/app/dashboard").trim();
@@ -127,13 +127,23 @@ export async function updateOrganizationProfile(formData: FormData) {
   const address = String(formData.get("address") ?? "").trim();
   const timezone = String(formData.get("timezone") ?? "Asia/Jakarta").trim();
   const photo = formData.get("photo");
-  const photoUrl = await saveOrganizationPhoto(
-    photo instanceof File ? photo : null,
-    organization.id,
-  );
+  let photoUrl: string | null;
 
   if (name.length < 2) {
     redirect("/app/profile?error=name");
+  }
+
+  try {
+    photoUrl = await saveOrganizationPhoto(
+      photo instanceof File ? photo : null,
+      organization.id,
+    );
+  } catch (error) {
+    if (error instanceof UploadError) {
+      redirect("/app/profile?error=photo");
+    }
+
+    throw error;
   }
 
   await prisma.organization.update({

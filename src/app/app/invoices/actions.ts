@@ -1,10 +1,6 @@
 "use server";
 
-import {
-  InvoiceStatus,
-  PaymentMethod,
-  PaymentStatus,
-} from "@prisma/client";
+import { InvoiceStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import {
@@ -36,7 +32,10 @@ async function requireInvoiceManager() {
 function getInvoicesRedirect(formData: FormData, fallback: string) {
   const redirectTo = String(formData.get("redirectTo") ?? "").trim();
 
-  return redirectTo.startsWith("/app/invoices") ? redirectTo : fallback;
+  return redirectTo.startsWith("/app/invoices") ||
+    redirectTo.startsWith("/app/students")
+    ? redirectTo
+    : fallback;
 }
 
 function getText(formData: FormData, key: string) {
@@ -208,16 +207,41 @@ async function requirePricingPlan(
   return pricingPlan;
 }
 
+async function requireBillingAgreement(
+  organizationId: string,
+  billingAgreementId: string,
+) {
+  const agreement = await prisma.billingAgreement.findFirst({
+    where: { id: billingAgreementId, organizationId },
+    include: {
+      enrollment: { include: { class: true, student: true } },
+      pricingPlan: { include: { program: true } },
+    },
+  });
+
+  if (!agreement || !agreement.enrollment || !agreement.pricingPlan) {
+    redirect("/app/invoices?error=billing-agreement");
+  }
+
+  return agreement;
+}
+
 function getInvoicePayload(formData: FormData) {
   const adjustmentAmount = getInteger(formData, "adjustmentAmount", 0);
+  const extraLineAmount = getInteger(formData, "extraLineAmount", 0);
   const issuedAt = getDate(formData, "issuedAt");
   const dueAt = getDate(formData, "dueAt");
   const registrationFeeAmount = getInteger(formData, "registrationFeeAmount", 0);
 
   return {
     adjustmentAmount,
+    billingAgreementId: String(
+      formData.get("billingAgreementId") ?? "",
+    ).trim(),
     dueAt,
     enrollmentId: String(formData.get("enrollmentId") ?? "").trim(),
+    extraLineAmount,
+    extraLineDescription: getText(formData, "extraLineDescription"),
     issuedAt,
     pricingPlanId: String(formData.get("pricingPlanId") ?? "").trim(),
     registrationFeeAmount,
@@ -232,13 +256,17 @@ async function validateInvoicePayload(
   currentInvoiceId?: string,
 ) {
   if (
-    !data.enrollmentId ||
-    !data.pricingPlanId ||
     !data.status ||
     data.adjustmentAmount === null ||
+    data.extraLineAmount === null ||
+    data.extraLineAmount < 0 ||
     data.registrationFeeAmount === null ||
     data.registrationFeeAmount < 0
   ) {
+    redirect("/app/invoices?error=invoice-data");
+  }
+
+  if (data.extraLineAmount > 0 && !data.extraLineDescription) {
     redirect("/app/invoices?error=invoice-data");
   }
 
@@ -246,10 +274,23 @@ async function validateInvoicePayload(
     redirect("/app/invoices?error=invoice-dates");
   }
 
-  const [enrollment, pricingPlan] = await Promise.all([
-    requireEnrollment(organizationId, data.enrollmentId),
-    requirePricingPlan(organizationId, data.pricingPlanId),
-  ]);
+  const agreement = data.billingAgreementId
+    ? await requireBillingAgreement(organizationId, data.billingAgreementId)
+    : null;
+  const [enrollment, pricingPlan] = agreement
+    ? [agreement.enrollment, agreement.pricingPlan]
+    : await Promise.all([
+        data.enrollmentId
+          ? requireEnrollment(organizationId, data.enrollmentId)
+          : null,
+        data.pricingPlanId
+          ? requirePricingPlan(organizationId, data.pricingPlanId)
+          : null,
+      ]);
+
+  if (!enrollment || !pricingPlan) {
+    redirect("/app/invoices?error=invoice-data");
+  }
 
   if (enrollment.class.programId !== pricingPlan.programId) {
     redirect("/app/invoices?error=package-program");
@@ -280,8 +321,8 @@ async function validateInvoicePayload(
     {
       description: `${pricingPlan.program.name} - ${pricingPlan.name}`,
       quantity: 1,
-      unitPrice: pricingPlan.price,
-      total: pricingPlan.price,
+      unitPrice: agreement?.amount ?? pricingPlan.price,
+      total: agreement?.amount ?? pricingPlan.price,
     },
   ];
 
@@ -294,11 +335,21 @@ async function validateInvoicePayload(
     });
   }
 
+  if (data.extraLineAmount > 0 && data.extraLineDescription) {
+    invoiceLines.push({
+      description: data.extraLineDescription,
+      quantity: 1,
+      unitPrice: data.extraLineAmount,
+      total: data.extraLineAmount,
+    });
+  }
+
   const subtotal = invoiceLines.reduce((total, line) => total + line.total, 0);
   const total = Math.max(subtotal + data.adjustmentAmount, 0);
 
   return {
     enrollment,
+    billingAgreement: agreement,
     invoiceLines,
     pricingPlan,
     subtotal,
@@ -319,6 +370,7 @@ export async function createInvoice(formData: FormData) {
       studentId: payload.enrollment.studentId,
       enrollmentId: payload.enrollment.id,
       pricingPlanId: payload.pricingPlan.id,
+      billingAgreementId: payload.billingAgreement?.id ?? null,
       invoiceNumber,
       status: data.status as InvoiceStatus,
       subtotal: payload.subtotal,
@@ -332,7 +384,7 @@ export async function createInvoice(formData: FormData) {
     },
   });
 
-  redirect("/app/invoices?created=1");
+  redirect(getInvoicesRedirect(formData, "/app/invoices?created=1"));
 }
 
 export async function updateInvoice(formData: FormData) {
@@ -374,6 +426,7 @@ export async function updateInvoice(formData: FormData) {
         studentId: payload.enrollment.studentId,
         enrollmentId: payload.enrollment.id,
         pricingPlanId: payload.pricingPlan.id,
+        billingAgreementId: payload.billingAgreement?.id ?? null,
         status,
         subtotal: payload.subtotal,
         adjustmentAmount: data.adjustmentAmount as number,
