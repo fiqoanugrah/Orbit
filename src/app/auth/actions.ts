@@ -8,10 +8,10 @@ import { devAuthCookie, getDevAuthUser, isDevAuthEnabled } from "@/lib/dev-auth"
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function getSafeNext(value: FormDataEntryValue | string | null) {
-  const next = String(value ?? "/auth/sign-in").trim();
+  const next = String(value ?? "/app/dashboard").trim();
 
   if (!next.startsWith("/") || next.startsWith("//")) {
-    return "/auth/sign-in";
+    return "/app/dashboard";
   }
 
   return next;

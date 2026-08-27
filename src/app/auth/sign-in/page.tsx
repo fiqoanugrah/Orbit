@@ -36,7 +36,7 @@ export default async function SignInPage({
   const params = await searchParams;
   const user = await getCurrentUser();
   const organizations = user ? await getOrganizationsForUser(user.id) : [];
-  const next = params.next ?? "/auth/sign-in";
+  const next = params.next ?? "/app/dashboard";
   const canUseDevLogin = isDevAuthEnabled();
 
   if (user && organizations.length === 0) {

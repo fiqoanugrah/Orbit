@@ -8,16 +8,15 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function getSafeNext(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/auth/sign-in";
+    return "/app/dashboard";
   }
 
   return value;
 }
 
 async function resolvePostLoginPath(userId: string, next: string) {
-  if (!["/auth/sign-in", "/auth/sign-up"].includes(next)) {
-    return next;
-  }
+  const isAuthEntryPage = ["/auth/sign-in", "/auth/sign-up"].includes(next);
+  const wantsAppPage = next.startsWith("/app");
 
   const memberships = await prisma.membership.findMany({
     where: { userId },
@@ -25,11 +24,11 @@ async function resolvePostLoginPath(userId: string, next: string) {
     orderBy: { createdAt: "asc" },
   });
 
-  if (memberships.length === 0) {
+  if (memberships.length === 0 && (isAuthEntryPage || wantsAppPage)) {
     return "/onboarding/create-organization";
   }
 
-  if (memberships.length === 1) {
+  if (memberships.length === 1 && (isAuthEntryPage || wantsAppPage)) {
     const cookieStore = await cookies();
     cookieStore.set(activeOrganizationCookie, memberships[0].organizationId, {
       httpOnly: true,
@@ -37,10 +36,10 @@ async function resolvePostLoginPath(userId: string, next: string) {
       path: "/",
     });
 
-    return "/app/dashboard";
+    return wantsAppPage ? next : "/app/dashboard";
   }
 
-  return "/auth/sign-in";
+  return isAuthEntryPage ? "/auth/sign-in" : next;
 }
 
 export async function GET(request: Request) {
